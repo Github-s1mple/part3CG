@@ -1,9 +1,14 @@
 package impl;
 
-import java.util.ArrayList;
+import lombok.Getter;
+import lombok.Setter;
 
+import java.util.ArrayList;
+@Setter
+@Getter
 public class Fences {
     private ArrayList<Fence> fenceList;
+    private int fenceNum;
     public Fence getFence(Integer fenceIndex) {
         for (Fence fence : fenceList) {
             if (fence.getIndex() == fenceIndex) {

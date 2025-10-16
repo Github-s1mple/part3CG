@@ -1,7 +1,11 @@
 package impl;
 
-import java.util.ArrayList;
+import lombok.Getter;
+import lombok.Setter;
 
+import java.util.ArrayList;
+@Setter
+@Getter
 public class Orders {
     private int orderNumber;
     private ArrayList<Order> orderList;
@@ -19,7 +23,4 @@ public class Orders {
         }
     }
 
-    public ArrayList<Order> getOrderList() {
-        return orderList;
-    }
 }

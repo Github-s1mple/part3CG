@@ -6,17 +6,20 @@ import impl.Route;
 import baseinfo.Constants;
 import impl.Carrier;
 import impl.Fence;
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import static java.lang.Math.min;
-
+@Setter
+@Getter
 public class LoadingAlgorithm {
     // 通用
     private final IObjectiveCalculator objCal;
     private final Fences fences;
-    private final Regions regions;
     private int orderCnt;
     //每次求解重新赋值
     private int minConsDist1; // 载重约束距离
@@ -25,7 +28,6 @@ public class LoadingAlgorithm {
     private Carrier minConstDist2_carrier;
     //    private double bestValue;
     private HashMap<Integer, Integer> bestLoads;
-    private Region region;
     private Route route;
     private List<Integer> fenceIndexList;
     private List<Integer> loadIndexes;
@@ -49,8 +51,6 @@ public class LoadingAlgorithm {
     public LoadingAlgorithm(BidLabeling bidLabeling) {
         this.objCal = bidLabeling.getObjCal();
         this.fences = bidLabeling.getFences();
-        this.regions = bidLabeling.getRegions();
-
         this.orderCnt = 0;
     }
 
@@ -76,8 +76,6 @@ public class LoadingAlgorithm {
 
 //        bestValue = 0.0;
         bestLoads = new HashMap<>();
-        region = regions.get(route.getRfId());
-
         generateConsDist();
         if (minConstDist1_carrier == null && minConstDist2_carrier == null) {
             return null;
@@ -102,8 +100,8 @@ public class LoadingAlgorithm {
             return null;
         } else {
             orderCnt = orderCnt + 1;
-            if (!isLongDistance) return new Order(route, bestLoads, orderCarrier, orderCnt, 1);
-            else return new Order(route, bestLoads, orderCarrier, orderCnt, 2);
+            if (!isLongDistance) return new Order(route, bestLoads, orderCarrier, orderCnt);
+            else return new Order(route, bestLoads, orderCarrier, orderCnt);
         }
     }
 

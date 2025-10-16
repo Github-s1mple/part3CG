@@ -1,15 +1,15 @@
 package algo;
 
-import impl.Carrier;
-import impl.Fence;
+import Utils.CommonUtils;
+import impl.*;
 import baseinfo.Constants;
-import impl.Fences;
 import lombok.Getter;
+import lombok.Setter;
 
 import java.util.*;
 
 import static java.lang.Math.min;
-
+@Setter
 @Getter
 public class BidLabeling {
     // 算例数据
@@ -18,7 +18,6 @@ public class BidLabeling {
     private Integer timeLimit;
     private Integer orderLimit;
     // 算法参数
-    private final Boolean loadingModelFlag = false; // 使用模型true, 使用算法false
     private final Boolean checkFlag = true; // 过程中是否检查约束
     // 输出参数
     private Boolean outputFlag = false; // 是否输出过程信息
@@ -34,9 +33,7 @@ public class BidLabeling {
     final HashMap<String, Order> visited2order = new HashMap<>(); // 已访问点对应工单
     // 预处理信息
     private final double minUnloadDistance;
-    private final Regions regions;
     private final List<Carrier> carrierList;
-    private final IObjectiveCalculator objCal;
 
     private final algo.LoadingAlgorithm loadingAlgorithm;
 
@@ -48,17 +45,9 @@ public class BidLabeling {
     // 构造方法
     public BidLabeling(Instance instance) {
         this.fences = instance.getFences();
-        this.regions = instance.getRegions();
         this.carrierList = instance.getCarrierList();
-        this.minUnloadDistance = instance.getSafetyDistance();
-        this.objCal = instance.getObjCal();
         this.dual_multiplier = instance.getAlgoParam().getDualMultiplier();
-        this.streetSweepDistance = instance.getAlgoParam().getDualMultiplier();
-//        this.modelVersion = instance.getModelParam().getModelVersion();
-//        this.vClassifier = instance.getVClassifier();
-        this.smallFenceThreshold = instance.getSmallFenceThreshold();
-        this.smallFenceMaxNum = instance.getSmallFenceMaxNum();
-        this.loadingAlgorithm = new Algo.AlgoCG.algBidLabelingCG.LoadingAlgorithm(this);
+        this.loadingAlgorithm = new LoadingAlgorithm(this);
         this.initialize(); // 初始化
     }
 
@@ -78,10 +67,7 @@ public class BidLabeling {
         //初始化搜索队列
         forwardLabelQueue.add(Label.generate(true, fences.getDepot(), forwardTabu));
         backwardLabelQueue.add(Label.generate(false, fences.getDepot(), backwardTabu));
-        // 预处理责任田载具信息
-        if (outputFlag) {
-            regions.print();
-        }
+
         // 初始化每个围栏最近异构围栏距离
         for (int i = 0; i < fences.getFenceNum(); i++) {
             Fence fenceI = fences.getFence(i);
@@ -183,15 +169,18 @@ public class BidLabeling {
         }
     }
 
-    /* 双向标号搜索 */
+    /* 双向标号搜索 - 适配只卸问题 */
     private void bidirectionalSearch(boolean isLongDistance) {
         int iterationCnt = 0;
+        // 初始化：前向从起点出发，后向从终点(仓库)出发
+        initializeUnloadingLabels();
+
         while (true) {
-            // 前向标号搜索
+            // 前向标号搜索（从起点向卸货点扩展）
             if (!forwardLabelQueue.isEmpty()) {
                 this.labelExpand(forwardLabelQueue.poll(), isLongDistance);
             }
-            // 后向标号搜索
+            // 后向标号搜索（从终点向卸货点反向扩展）
             if (!backwardLabelQueue.isEmpty()) {
                 this.labelExpand(backwardLabelQueue.poll(), isLongDistance);
             }
@@ -215,293 +204,279 @@ public class BidLabeling {
         }
     }
 
+    // 初始化只卸问题的标签
+    private void initializeUnloadingLabels() {
+        // 前向标签：从起点出发，无装载量，初始卸货量为0
+        Label forwardInit = Label.generate(
+                true,  // 前向标签
+                fences.getDepot(),  // 起点
+                null,  // 父标签
+                new BitSet(fences.size()),  // 禁忌表
+                0.0,  // 初始卸货量（只卸问题中记录总卸货量）
+                0.0,  // 初始距离
+                0,  // 访问次数
+                null,  // 区域ID
+                0,  // 最小卸货数
+                0   // 小型站点数量
+        );
+        forwardInit.getTabu().set(fences.getDepot(), true);  // 标记起点为已访问
+        forwardLabelQueue.add(forwardInit);
+
+        // 后向标签：从终点(仓库)出发，反向扩展
+        Label backwardInit = Label.generate(
+                false,  // 后向标签
+                fences.getDepot(),  // 终点
+                null,  // 父标签
+                new BitSet(fences.size()),  // 禁忌表
+                0.0,  // 初始卸货量
+                0.0,  // 初始距离
+                0,  // 访问次数
+                null,  // 区域ID
+                0,  // 最小卸货数
+                0   // 小型站点数量
+        );
+        backwardInit.getTabu().set(fences.getDepot(), true);  // 标记终点为已访问
+        backwardLabelQueue.add(backwardInit);
+    }
+
     private void labelExpand(Label label, boolean isLongDistance) {
-        Fence fence = fences.getFence(label.getCurFence());
+        Fence currentFence = fences.getFence(label.getCurFence());
         boolean isForward = label.isForward();
-        for (int nextNode : fence.getDistances().keySet()) {
-            // 如果是自己或者是禁止搜索的则跳过
+
+        // 只卸问题：扩展时只考虑卸货点
+        for (int nextNode : getValidUnloadingNodes(currentFence, label, isForward)) {
+            // 跳过禁忌节点
             if (label.getTabu().get(nextNode)) {
                 add_record(NameConstants.LABEL_EXPAND_TABU);
                 continue;
             }
-            // 如果是虚拟节点（目的是截断搜索），则判断是否能成单，并压入待匹配池
-            if (nextNode == fences.getDepot() && label.getLoadedQuantity() >= regions.getMinCarrierLoad()) {
-                if (isForward) {
-                    for (Label labelI : this.backwardLabelPool) {
-                        this.labelConnect(label, labelI, isLongDistance);
-                    }
-                    this.forwardLabelPool.add(label);
-                } else {
-                    for (Label labelI : this.forwardLabelPool) {
-                        this.labelConnect(labelI, label, isLongDistance);
-                    }
-                    this.backwardLabelPool.add(label);
-                }
-            } else if (nextNode != fences.getDepot()) {
-                // update params
-                Fence nextFence = fences.getFence(nextNode);
-                String rfId_ = label.getRfId() == null ? nextFence.getRfId() : label.getRfId();
-                Region region_ = regions.get(rfId_);
-                Integer maxCapacity = isForward ? region_.getMaxCapacity() : regions.getMaxCapacity();
-                Double maxDistance;
-                if(!isLongDistance){
-                    maxDistance = isForward ? region_.getMaxDistance() : regions.getMaxDistance();
-                }else {
-                    maxDistance = Constants.longDistanceMax;
-                }
 
-                Integer maxVisitNum = isForward ? region_.getMaxVisitNum() : regions.getMaxVisitNum();
-
-                if (label.getVisitNum() > maxVisitNum - 2) {
-                    add_record("labelExpand: visit num filter num");
-                    continue;
-                }
-
-                int minNumber_ = label.getMinNumber() + nextFence.getMinDispatchNum();
-                if (minNumber_ > maxCapacity) {
-                    add_record("labelExpand: capacity filter num");
-                    if (isLongDistance && isForward) {
-                        //log.info("容量限制");
-                    }
-                    continue;
-                }
-
-                // 根据是否为长距离调度场景进行不同筛选
-                double distance_ = (isForward ? fence.getDistance(nextFence) : nextFence.getDistance(fence))
-                        + label.getTravelDistance();
-                if (distance_ > maxDistance - nextFence.getNearestDiffLabelDist()) {
-                    add_record("labelExpand: distance filter num");
-                    continue;
-                }
-
-                BitSet tabu_ = (BitSet) label.getTabu().clone();
-                tabu_.set(nextNode, true);
-
-                //小点插入，如果nextFence的缺口/冗余不超过smallFenceThreshold并且当前标签的smallFence数量不超过上限，则继续进行搜索
-                int smallLoadedN = label.getSmallLoadedN();
-                if (Math.abs(nextFence.getDemand()) < smallFenceThreshold.get(nextFence.getFenceType())) {
-                    smallLoadedN += 1;
-                    if (smallLoadedN > smallFenceMaxNum.get(nextFence.getFenceType())) {
-                        continue;
-                    }
-                }
-
-                Label newLabel = Label.generate(isForward,
-                        nextFence.getIndexInInstance(), label, tabu_,
-                        label.getLoadedQuantity() + Math.abs(nextFence.getDemand()), distance_,
-                        label.getVisitNum() + 1, rfId_, minNumber_, smallLoadedN);
-                this.dominantAdd(newLabel, nextNode);
+            Fence nextFence = fences.getFence(nextNode);
+            // 只卸问题：检查是否为卸货点
+            if (!nextFence.isUnloadingPoint()) {
+                add_record(NameConstants.NOT_UNLOADING_POINT);
+                continue;
             }
+
+            // 区域和约束参数（只卸问题调整）
+            String rfId_ = label.getRfId() == null ? nextFence.getRfId() : label.getRfId();
+            Region region_ = regions.get(rfId_);
+            double maxDistance = getMaxDistance(isLongDistance, isForward, region_);
+            int maxVisitNum = isForward ? region_.getMaxVisitNum() : regions.getMaxVisitNum();
+
+            // 访问次数约束
+            if (label.getVisitNum() + 1 > maxVisitNum) {
+                add_record("labelExpand: visit num filter");
+                continue;
+            }
+
+            // 卸货量约束（只卸问题核心约束）
+            double newUnloaded = label.getLoadedQuantity() + nextFence.getDemand();  // 原loadedQuantity改为记录卸货量
+            if (newUnloaded > region_.getMaxCapacity()) {  // 最大卸货容量约束
+                add_record("labelExpand: unload capacity filter");
+                continue;
+            }
+
+            // 距离约束
+            double distance_ = calculateDistance(label, currentFence, nextFence, isForward) + label.getTravelDistance();
+            if (distance_ > maxDistance - nextFence.getNearestDiffLabelDist()) {
+                add_record("labelExpand: distance filter");
+                continue;
+            }
+
+            // 小型站点数量控制
+            int smallLoadedN = label.getSmallLoadedN();
+            if (isSmallUnloadingPoint(nextFence)) {
+                smallLoadedN += 1;
+                if (smallLoadedN > getSmallFenceMaxNum(nextFence.getFenceType())) {
+                    continue;
+                }
+            }
+
+            // 创建新标签（更新禁忌表）
+            BitSet tabu_ = (BitSet) label.getTabu().clone();
+            tabu_.set(nextNode, true);
+
+            Label newLabel = Label.generate(
+                    isForward,
+                    nextFence.getIndexInInstance(),
+                    label,
+                    tabu_,
+                    newUnloaded,  // 记录卸货量
+                    distance_,
+                    label.getVisitNum() + 1,
+                    rfId_,
+                    label.getMinNumber() + nextFence.getMinUnloadNum(),  // 最小卸货数
+                    smallLoadedN
+            );
+
+            this.dominantAdd(newLabel, nextNode);
         }
     }
 
-    private void dominantAdd(Label label, int fenceIdx) {
-        boolean isForward = label.isForward();
-        int li = 0;
-        while (li < this.labelPool.get(fenceIdx).size()) {
-            Label labelI = this.labelPool.get(fenceIdx).get(li);
-            // 是否存在围栏相同，但是路径更短的，如果存在就替换并删除搜索队列中的标号，如果更差则放弃
-            if (this.dominantRuleDispatchAndVisit(label, labelI) == 0) {
-                if (this.dominantRule(label, labelI) == 1) {
-                    this.labelPool.get(fenceIdx).remove(li);
-                    if (isForward) {
-                        this.forwardLabelQueue.remove(labelI);
-                    } else {
-                        this.backwardLabelQueue.remove(labelI);
-                    }
-                    add_record(NameConstants.DOMINANT_ADD);
-                } else if (this.dominantRule(label, labelI) == -1) {
-                    add_record(NameConstants.DOMINANT_ADD);
-                    return;
-                } else {
-                    li += 1;
-                }
-            } else if (this.dominantRuleDispatchAndVisit(label, labelI) == 1) {
-                this.labelPool.get(fenceIdx).remove(li);
-                if (isForward) {
-                    this.forwardLabelQueue.remove(labelI);
-                } else {
-                    this.backwardLabelQueue.remove(labelI);
-                }
-                add_record(NameConstants.DOMINANT_ADD);
-            } else if (this.dominantRuleDispatchAndVisit(label, labelI) == -1) {
-                add_record(NameConstants.DOMINANT_ADD);
-                return;
-            }
-        }
-        this.labelPool.get(fenceIdx).add(label);
-        if (isForward) {
-            this.forwardLabelQueue.add(label);
-        } else {
-            this.backwardLabelQueue.add(label);
-        }
+    // 计算扩展距离（前向/后向不同逻辑）
+    private double calculateDistance(Label label, Fence current, Fence next, boolean isForward) {
+        return isForward ? current.getDistance(next) : next.getDistance(current);
     }
 
+    // 获取只卸问题的有效扩展节点
+    private List<Integer> getValidUnloadingNodes(Fence current, Label label, boolean isForward) {
+        List<Integer> nodes = new ArrayList<>();
+        for (int node : current.getDistances().keySet()) {
+            // 排除仓库节点（除了后向标签返回仓库的情况）
+            if (node == fences.getDepot() && !(label.getVisitNum() > 0 && !isForward)) {
+                continue;
+            }
+            nodes.add(node);
+        }
+        return nodes;
+    }
+
+    // 支配规则修改（只卸问题适配）
     private Integer dominantRule(Label label1, Label label2) {
-        // 1: label1 dominant label2; -1: label2 dominant label1; 0: no dominant
-        BitSet tabuDominate = (BitSet) label1.getTabu().clone();
-        tabuDominate.xor(label2.getTabu());
-        if (tabuDominate.cardinality() == 0) {
-            if (label1.getTravelDistance() <= label2.getTravelDistance()) {
+        // 1: label1支配label2; -1: label2支配label1; 0: 无支配关系
+        // 1. 检查禁忌表（已访问节点）
+        BitSet tabu1 = label1.getTabu();
+        BitSet tabu2 = label2.getTabu();
+
+        // 2. 只卸问题支配条件：访问节点相同情况下，卸货量更大且距离更短的标签更优
+        if (tabu1.equals(tabu2)) {
+            if (label1.getLoadedQuantity() >= label2.getLoadedQuantity() &&  // 卸货量更大
+                    label1.getTravelDistance() <= label2.getTravelDistance()) {  // 距离更短
                 return 1;
-            } else {
+            } else if (label2.getLoadedQuantity() >= label1.getLoadedQuantity() &&
+                    label2.getTravelDistance() <= label1.getTravelDistance()) {
                 return -1;
             }
-        } else {
-            return 0;
         }
+
+        // 3. 检查是否为子集关系（A包含B的所有节点，且更优）
+        BitSet subsetCheck = (BitSet) tabu1.clone();
+        subsetCheck.and(tabu2);
+        if (subsetCheck.equals(tabu2)) {  // label1包含label2的所有节点
+            if (label1.getTravelDistance() <= label2.getTravelDistance() &&
+                    label1.getLoadedQuantity() >= label2.getLoadedQuantity()) {
+                return 1;
+            }
+        }
+
+        subsetCheck = (BitSet) tabu2.clone();
+        subsetCheck.and(tabu1);
+        if (subsetCheck.equals(tabu1)) {  // label2包含label1的所有节点
+            if (label2.getTravelDistance() <= label1.getTravelDistance() &&
+                    label2.getLoadedQuantity() >= label1.getLoadedQuantity()) {
+                return -1;
+            }
+        }
+
+        return 0;  // 无支配关系
     }
 
-    public Integer dominantRuleDispatchAndVisit(Label label1, Label label2) {
-        // 1: label1 dominant label2; -1: label2 dominant label1; 0: no dominant
-//        if (label1.getTravelDistance() <= label2.getTravelDistance()) {
-//            if (label1.getLoadedQuantity() >= label2.getLoadedQuantity()) {
-//                return 1;
-//            }
-//        } else {
-//            if (label1.getLoadedQuantity() < label2.getLoadedQuantity()) {
-//                    return -1;
-//            }
-//        }
-        return 0;
-    }
-
-    /* 标号连接 */
+    /* 标号连接 - 只卸问题简化版 */
     private void labelConnect(Label forwardLabel, Label backwardLabel, boolean isLongDistance) {
-        Fence forward_last_fence = fences.getFence(forwardLabel.getCurFence());
-        Fence backward_first_fence = fences.getFence(backwardLabel.getCurFence());
-        Region forwardRegion = this.regions.get(forwardLabel.getRfId());
+        // 1. 检查前向终点和后向起点是否可连接
+        Fence forwardEnd = fences.getFence(forwardLabel.getCurFence());
+        Fence backwardStart = fences.getFence(backwardLabel.getCurFence());
 
-        if (!forward_last_fence.getArcs().contains(backward_first_fence.getIndexInInstance())) {
+        if (!forwardEnd.getArcs().contains(backwardStart.getIndexInInstance())) {
             add_record(NameConstants.ARC_FILTER);
             return;
         }
 
-        double connect_dist = forward_last_fence.getDistance(backward_first_fence);
-        if (connect_dist < this.minUnloadDistance) {
-            add_record(NameConstants.MIN_UNLOAD_FILTER);
+        // 2. 距离约束检查
+        double connectDist = forwardEnd.getDistance(backwardStart);
+        double totalDist = forwardLabel.getTravelDistance() + connectDist + backwardLabel.getTravelDistance();
+        Region region = regions.get(forwardLabel.getRfId());
+
+        if (!checkDistanceConstraint(totalDist, isLongDistance, region)) {
+            add_record(NameConstants.DISTANCE_FILTER);
             return;
         }
 
-        // 附加长距离调度距离最小值
-        double total_dist = forwardLabel.getTravelDistance() + connect_dist + backwardLabel.getTravelDistance();
-        if(!isLongDistance) {
-            if (total_dist > forwardRegion.getMaxDistance()) {
-                add_record(NameConstants.MAX_DISTANCE_FILTER);
-                return;
-            }
-        }else{
-            if (total_dist < Constants.longDistanceMin) {
-                add_record(NameConstants.MIN_DISTANCE_FILTER);
-                return;
-            }
-            if (total_dist > Constants.longDistanceMax) {
-                add_record(NameConstants.MAX_DISTANCE_FILTER);
-                return;
-            }
+        // 3. 卸货量和访问次数检查
+        double totalUnloaded = forwardLabel.getLoadedQuantity() + backwardLabel.getLoadedQuantity();
+        if (totalUnloaded > region.getMaxCapacity()) {
+            add_record(NameConstants.TOTAL_UNLOAD_FILTER);
+            return;
         }
 
-        int total_visit_num = forwardLabel.getVisitNum() + backwardLabel.getVisitNum();
-        if (total_visit_num > forwardRegion.getMaxVisitNum()) {
+        int totalVisitNum = forwardLabel.getVisitNum() + backwardLabel.getVisitNum();
+        if (totalVisitNum > region.getMaxVisitNum()) {
             add_record(NameConstants.MAX_VISIT_FILTER);
             return;
         }
 
-        int minDispatchNum = Math.max(forwardLabel.getMinNumber(), backwardLabel.getMinNumber());
-        int maxDispatchNum = min(forwardLabel.getLoadedQuantity(), backwardLabel.getLoadedQuantity());
-        if (maxDispatchNum < minDispatchNum) // 不满足最小装卸量要求
-            return;
-
-        if (forwardLabel.getLoadedQuantity() < backwardLabel.getMinNumber()
-                || backwardLabel.getLoadedQuantity() < forwardLabel.getMinNumber() - Constants.maxExtraUnloadNum) {
-            add_record(NameConstants.MIN_SINGLE_LOAD_FILTER);
+        // 4. 检查节点是否重复访问（前后向标签访问节点必须无交集）
+        BitSet forwardVisited = forwardLabel.getTabu();
+        BitSet backwardVisited = backwardLabel.getTabu();
+        BitSet intersection = (BitSet) forwardVisited.clone();
+        intersection.and(backwardVisited);
+        if (!intersection.isEmpty() && !isDepotOnly(intersection)) {  // 仅允许仓库节点重复
+            add_record(NameConstants.DUPLICATE_NODE_FILTER);
             return;
         }
 
-        // 根据连接潜力剪枝
+        // 5. 构建完整路径
         List<Integer> forwardRoute = forwardLabel.getFenceIndexList();
-        List<Integer> backwardRoute = backwardLabel.getFenceIndexList();
-        // 若不能产生利润则剪枝
-        double maxBackwardValue = 0;
-        for (int index : backwardRoute) {
-            maxBackwardValue = Math.max(maxBackwardValue, fences.getFenceValue(index));
-        }
+        List<Integer> backwardRoute = reverse(backwardLabel.getFenceIndexList());  // 后向路径反转
 
-        double minForwardValue = Double.POSITIVE_INFINITY;
-        for (int index : forwardRoute) {
-            minForwardValue = min(minForwardValue, fences.getFenceValue(index));
-        }
+        List<Integer> fullRoute = new ArrayList<>(forwardRoute);
+        fullRoute.remove(fullRoute.size() - 1);  // 移除重复的仓库节点
+        fullRoute.addAll(backwardRoute);
 
-        if (maxBackwardValue - minForwardValue < 0) {
-            add_record(NameConstants.NO_PROFIT_FILTER);
-            return;
-        }
+        // 6. 创建路径并生成订单
+        Route route = Route.builder()
+                .rfId(region.getRegionId())
+                .totalDistance(totalDist)
+                .totalVisitNum(totalVisitNum)
+                .totalUnloaded(totalUnloaded)  // 只卸问题：记录总卸货量
+                .fenceIndexList(fullRoute)
+                .isLongDistance(isLongDistance)
+                .build();
 
-        List<Integer> fenceIndexList = new ArrayList<>();
-        fenceIndexList.addAll(forwardRoute);
-        fenceIndexList.addAll(backwardRoute);
+        // 7. 生成订单（简化装载逻辑，只处理卸货）
+        Order order = this.unloadingOnlyLoading(route);
+        if (order == null) return;
 
-        // 构造完整路径
-        Route route = Route.builder().
-                rfId(forwardRegion.getRegionId()).
-                totalDistance(total_dist).
-                totalVisitNum(total_visit_num).
-                maxDispatchNum(maxDispatchNum).
-                minDispatchNum(minDispatchNum).
-                loadIndex(forwardRoute).
-                unloadIndex(backwardRoute).
-                isLongDistance(isLongDistance).
-                fenceIndexList(fenceIndexList).build();
-
-        // 根据路径经过点集筛除（访问围栏相同，但是顺序不同，只保留短的）
-        Order sameNodeSetOrder = this.visited2order.getOrDefault(route.getRouteVitedString(), null);
-        if (sameNodeSetOrder != null) {
-            if (route.getTotalDistance() >= sameNodeSetOrder.getTotalDistance()) {
-                add_record(NameConstants.SAME_NODE_FILTER);
-                return;
-            }
-        }
-
-        // 求解装卸及车型方案
-        int startTime = CommonUtils.currentTimeInSecond();
-        Order order = this.loading(route);
-        this.timeRecord += CommonUtils.currentTimeInSecond() - startTime;
-
-        if (order == null) {
-            return;
-        }
-
-        if (order.getObj() < Constants.OBJ_LB) {
-            add_record(NameConstants.NEGATIVE_OBJ_FILTER);
-            return;
-        }
-
-        order.setDualObj(objCal.calculateDualObj(order));
-        // 连接成功
-        if (sameNodeSetOrder != null) {
-            this.orderPool.remove(sameNodeSetOrder); // 去除路径被支配的工单
-            add_record(NameConstants.SAME_NODE_FILTER);
-        }
-        this.visited2order.put(route.getRouteVitedString(), order);
-        this.orderPool.add(order);
-        this.bestObj = Math.max(this.bestObj, order.getObj());
+        // 8. 加入订单池
+        addOrderToPool(order, route);
     }
 
-    private Order loading(Route route) {
-        Order order = this.loadingAlgorithm.solve(route);
+    // 只卸问题的订单生成（取消装载逻辑）
+    private Order unloadingOnlyLoading(Route route) {
+        Order order = new Order();
+        order.setRoute(route);
+        order.setTotalUnloaded(route.getTotalUnloaded());
+        order.setTotalDistance(route.getTotalDistance());
 
-        if (order == null) {
+        // 计算目标函数（只考虑卸货收益和成本）
+        double profit = calculateUnloadingProfit(route);
+        order.setObj(profit);
+
+        // 可行性检查（只卸相关约束）
+        if (!ConstraintsManager.isUnloadingOrderFeasible(order, this.minUnloadDistance, fences)) {
             return null;
         }
 
-        if (!ConstraintsManager.isOrderFeasible(order, this.minUnloadDistance, fences)) {
-            return null;
-        }
-
-        order.setObj(objCal.calculatePrimalObj(order));
         add_record(NameConstants.CONNECT_SUCCESS);
         return order;
     }
+
+    // 辅助方法：检查是否仅包含仓库节点
+    private boolean isDepotOnly(BitSet bitSet) {
+        int depot = fences.getDepot();
+        return bitSet.cardinality() == 1 && bitSet.get(depot);
+    }
+
+    // 辅助方法：检查距离约束
+    private boolean checkDistanceConstraint(double totalDist, boolean isLongDistance, Region region) {
+        if (isLongDistance) {
+            return totalDist >= Constants.longDistanceMin && totalDist <= Constants.longDistanceMax;
+        } else {
+            return totalDist <= region.getMaxDistance();
+        }
+    }
+
 
     private List<Order> generateOutputOrders() {
         List<Order> orders = orderPool.subList(0, min(orderLimit, orderPool.size()));

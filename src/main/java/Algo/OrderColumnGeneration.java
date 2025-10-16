@@ -1,9 +1,7 @@
 package algo;
 
-import impl.Carrier;
-import impl.Fence;
-import impl.Fences;
-import impl.Instance;
+import Utils.CommonUtils;
+import impl.*;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
@@ -11,8 +9,8 @@ import baseinfo.Constants;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-
-@Slf4j
+@Setter
+@Getter
 public class OrderColumnGeneration {
     final Instance instance; // 算例数据
     final Fences fences;

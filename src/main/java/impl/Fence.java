@@ -1,10 +1,13 @@
 package impl;
 
 import baseinfo.Map;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-
+@Setter
+@Getter
 public class Fence {
     private Integer index;
     private Double totalDemand;
@@ -12,6 +15,10 @@ public class Fence {
     private Double depotDemand;
     private Double deliverDemand;
     private HashMap<Integer, Double> distanceMap;
+    private double fenceValue;
+    private boolean isDepot;
+    private int minDispatchNum;
+    private int maxDispatchNum;
     public Fence(Integer index, HashMap<Integer, Integer> fence) {}
 
     public Fence(Integer index) {}

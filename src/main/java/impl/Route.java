@@ -2,67 +2,15 @@ package impl;
 
 import baseinfo.Constants;
 import baseinfo.Map;
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.ArrayList;
+@Setter
+@Getter
 
 public class Route {
     private double distance;
-
-    public double getDistance() {
-        return distance;
-    }
-
-    public void setDistance(double distance) {
-        this.distance = distance;
-    }
-
-    public int getVisitNumber() {
-        return visitNumber;
-    }
-
-    public void setVisitNumber(int visitNumber) {
-        this.visitNumber = visitNumber;
-    }
-
-    public Double getMaxDistance() {
-        return maxDistance;
-    }
-
-    public void setMaxDistance(Double maxDistance) {
-        this.maxDistance = maxDistance;
-    }
-
-    public Integer getMaxVisitNumber() {
-        return maxVisitNumber;
-    }
-
-    public void setMaxVisitNumber(Integer maxVisitNumber) {
-        this.maxVisitNumber = maxVisitNumber;
-    }
-
-    public ArrayList<Integer> getFenceList() {
-        return fenceList;
-    }
-
-    public void setFenceList(ArrayList<Integer> fenceList) {
-        this.fenceList = fenceList;
-    }
-
-    public Carrier getCarrier() {
-        return carrier;
-    }
-
-    public void setCarrier(Carrier carrier) {
-        this.carrier = carrier;
-    }
-
-    public Fence getStartFence() {
-        return startFence;
-    }
-
-    public void setStartFence(Fence startFence) {
-        this.startFence = startFence;
-    }
-
     private int visitNumber;
     private Double maxDistance;
     private Integer maxVisitNumber;

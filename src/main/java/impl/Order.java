@@ -1,9 +1,12 @@
 package impl;
 
 import baseinfo.Constants;
+import lombok.Getter;
+import lombok.Setter;
 
 import java.util.ArrayList;
-
+@Setter
+@Getter
 public class Order {
     private double distance;
     private int fenceNumber;
@@ -11,6 +14,9 @@ public class Order {
     private Carrier carrier;
     private double price;
     private Fence depot;
+    private double dualValue;
+    private double totalValue;
+    private double dualObj;
 
     public Order(Route route) {
         this.distance = route.getDistance();
@@ -20,18 +26,6 @@ public class Order {
         this.depot = route.getStartFence();
         this.price = 0;
         calculatePrice();
-    }
-
-    public double getDistance() {
-        return distance;
-    }
-
-    public void setDistance(double distance) {
-        this.distance = distance;
-    }
-
-    public void setPrice(double price) {
-        this.price = price;
     }
 
     public void calculatePrice() {
