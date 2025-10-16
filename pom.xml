@@ -9,9 +9,19 @@
     <version>1.0-SNAPSHOT</version>
 
     <properties>
+        <!-- 使用稳定的 Java 版本，17 是长期支持版本 -->
         <maven.compiler.source>25</maven.compiler.source>
         <maven.compiler.target>25</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
 
+    <!-- 所有依赖必须放在 dependencies 标签内 -->
+    <dependencies>
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.24</version>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
 </project>
