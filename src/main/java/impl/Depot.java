@@ -6,22 +6,19 @@ import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+
 @Setter
 @Getter
-public class Fence {
+public class Depot {
     private Integer index;
-    private Double totalDemand;
-    private Double selfDemand;
-    private Double depotDemand;
-    private Double deliverDemand;
+    private Double capacity;
     private HashMap<Integer, Double> distanceMap;
     private double fenceValue;
-    private double minDispatchNum;
-    private double maxDispatchNum;
-    private ArrayList<Integer> vaildArcFence;
-    private double nearestDiffLabelDist;
+    private int minDispatchNum;
+    private int maxDispatchNum;
+    public Depot(Integer index, HashMap<Integer, Integer> fence) {}
 
-    public Fence(Integer index) {}
+    public Depot(Integer index) {}
     public Integer getIndex() {
         return index;
     }
@@ -35,9 +32,5 @@ public class Fence {
 
     public Double getDistance(Integer endFence) {
         return this.distanceMap.get(endFence);
-    }
-
-    public Double getDistance(Fence endFence) {
-        return this.distanceMap.get(endFence.getIndex());
     }
 }

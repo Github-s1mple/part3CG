@@ -1,11 +1,9 @@
 package algo;
 
-import impl.Fences;
-import impl.Order;
-import impl.Route;
+import Utils.ConstraintsManager;
+import Utils.PriceCalculator;
+import impl.*;
 import baseinfo.Constants;
-import impl.Carrier;
-import impl.Fence;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -18,39 +16,37 @@ import static java.lang.Math.min;
 @Getter
 public class LoadingAlgorithm {
     // 通用
-    private final IObjectiveCalculator objCal;
     private final Fences fences;
+    private final Carriers carriers;
     private int orderCnt;
     //每次求解重新赋值
-    private int minConsDist1; // 载重约束距离
-    private int minConsDist2; // 满载率约束距离
+    private double minConsDist1; // 载重约束距离
+    private double minConsDist2; // 满载率约束距离
     private Carrier minConstDist1_carrier;
     private Carrier minConstDist2_carrier;
     //    private double bestValue;
-    private HashMap<Integer, Integer> bestLoads;
+    private HashMap<Integer, Double> bestLoads;
     private Route route;
     private List<Integer> fenceIndexList;
-    private List<Integer> loadIndexes;
-    private List<Integer> unloadIndexes;
-    private int bestDispatchNum;
-    private HashMap<Integer, Integer> bestDispatchNumLoads;
+    private double bestDispatchNum;
+    private HashMap<Integer, Double> bestDispatchNumLoads;
     private Carrier orderCarrier;
 
     private static class ConsDist {
         //装载量是否小于容量，0为满足容量约束，正数为超过容量的调度量
-        int consDist1;
+        double consDist1;
         //装载量是否小于满载率，0为满足满载率，正数为达到满载率还需的调度量
-        int consDist2;
+        double consDist2;
 
-        ConsDist(int bestDispatchNum, Carrier carrier) {
-            consDist1 = Math.max(0, bestDispatchNum - carrier.getCapacity());
-            consDist2 = Math.max(0, carrier.getMinRatioCapacity() - bestDispatchNum);
+        ConsDist(double bestDispatchNum, Carrier carrier) {
+            consDist1 = Math.max(0.0, bestDispatchNum - carrier.getCapacity());
+            consDist2 = Math.max(0.0, carrier.getMinRatioCapacity() - bestDispatchNum);
         }
     }
 
     public LoadingAlgorithm(BidLabeling bidLabeling) {
-        this.objCal = bidLabeling.getObjCal();
         this.fences = bidLabeling.getFences();
+        this.carriers = bidLabeling.getCarriers();
         this.orderCnt = 0;
     }
 
@@ -58,15 +54,10 @@ public class LoadingAlgorithm {
         // 获取基本信息
 
         route = rRoute;
-        boolean isLongDistance = route.isLongDistance();
-        fenceIndexList = route.getFenceIndexList();
-        loadIndexes = route.getLoadIndex().stream().sorted((o1, o2) -> fences.getFenceValue(o1).compareTo(fences.getFenceValue(o2)))
-                .collect(Collectors.toList());
-        unloadIndexes = route.getUnloadIndex().stream().sorted((o1, o2) -> fences.getFenceValue(o2).compareTo(fences.getFenceValue(o1)))
-                .collect(Collectors.toList());
+        fenceIndexList = route.getFenceList();
         // 计算最优调度量
         bestDispatchNum = route.getMaxDispatchNum();
-        bestDispatchNumLoads = dispatchNum2loads(route.getMaxDispatchNum(), isLongDistance);
+        bestDispatchNumLoads = dispatchNum2loads(route.getMaxDispatchNum());
 
         // 选择满足约束的载具
         minConsDist1 = Integer.MAX_VALUE; // 载重约束距离
@@ -85,11 +76,11 @@ public class LoadingAlgorithm {
             bestLoads = bestDispatchNumLoads;
             orderCarrier = minConstDist1_carrier;
         } else if (minConstDist1_carrier == null) {
-            bestLoads = this.dispatchNum2loads(minConstDist2_carrier.getMinRatioCapacity(), isLongDistance);
+            bestLoads = this.dispatchNum2loads(minConstDist2_carrier.getMinRatioCapacity());
 
             orderCarrier = minConstDist2_carrier;
         } else if (minConstDist2_carrier == null) {
-            bestLoads = this.dispatchNum2loads(minConstDist1_carrier.getCapacity(), isLongDistance);
+            bestLoads = this.dispatchNum2loads(minConstDist1_carrier.getCapacity());
 
             orderCarrier = minConstDist1_carrier;
         } else {
@@ -100,60 +91,37 @@ public class LoadingAlgorithm {
             return null;
         } else {
             orderCnt = orderCnt + 1;
-            if (!isLongDistance) return new Order(route, bestLoads, orderCarrier, orderCnt);
-            else return new Order(route, bestLoads, orderCarrier, orderCnt);
+            return new Order(route, bestLoads, orderCarrier, orderCnt);
         }
     }
 
-    private HashMap<Integer, Integer> dispatchNum2loads(int dispatchNum, boolean streetsweep) {
-        HashMap<Integer, Integer> loads = new HashMap<>();
-        generateNumWithType(loadIndexes, dispatchNum, NameConstants.LOAD, loads, streetsweep);
-        generateNumWithType(unloadIndexes, dispatchNum, NameConstants.UN_LOAD, loads, streetsweep);
+    private HashMap<Integer, Double> dispatchNum2loads(double dispatchNum) {
+        HashMap<Integer, Double> loads = new HashMap<>();
+        generateNumWithType(fenceIndexList, dispatchNum, loads);
         return loads;
     }
 
-    private void generateNumWithType(List<Integer> indexes, int dispatchNum, String loadType, HashMap<Integer, Integer> loads, boolean streetsweep) {
-        int coefficient = 1;
-        int loadCnt = dispatchNum;
-        if (streetsweep && loadType.equals(NameConstants.LOAD)) {
-            for (int fenceIndex : indexes) {
-                Fence fence = fences.getFence(fenceIndex);
-                int actualDispatchNum = min(1, Math.abs(fence.getDemand()));
-                loads.put(fenceIndex, actualDispatchNum);
-                loadCnt -= actualDispatchNum;
+    private void generateNumWithType(List<Integer> indexes, double dispatchNum, HashMap<Integer, Double> loads) {
+        double loadCnt = dispatchNum;
+        for (int fenceIndex : indexes) {
+            Fence fence = fences.getFence(fenceIndex);
+            double actualDispatchNum = min(fence.getMinDispatchNum(), fence.getDeliverDemand());
+            loads.put(fenceIndex, actualDispatchNum);
+            loadCnt -= actualDispatchNum;
+        }
+        for (int i : indexes) {
+            double lack = fences.getFence(i).getDeliverDemand() - loads.get(i);
+            if (lack >= loadCnt) {
+                loads.put(i, loads.get(i) + loadCnt);
+                break;
             }
-            for (int i : indexes) {
-                int lack = Math.abs(fences.getFence(i).getDemand()) - loads.get(i);
-                if (lack >= loadCnt) {
-                    loads.put(i, loads.get(i) + loadCnt);
-                    break;
-                }
-                loads.put(i, loads.get(i) + lack);
-                loadCnt -= lack;
-            }
-        } else {
-            if (loadType.equals(NameConstants.UN_LOAD)) {
-                coefficient = -1;
-            }
-            for (int fenceIndex : indexes) {
-                Fence fence = fences.getFence(fenceIndex);
-                loads.put(fenceIndex, coefficient * fence.getMinDispatchNum());
-                loadCnt -= fence.getMinDispatchNum();
-            }
-            for (int i : indexes) {
-                int lack = Math.abs(fences.getFence(i).getDemand()) - Math.abs(loads.get(i));
-                if (lack >= loadCnt) {
-                    loads.put(i, loads.get(i) + coefficient * loadCnt);
-                    break;
-                }
-                loads.put(i, loads.get(i) + coefficient * lack);
-                loadCnt -= lack;
-            }
+            loads.put(i, loads.get(i) + lack);
+            loadCnt -= lack;
         }
     }
 
     private void generateConsDist() {
-        for (Carrier carrier : region.getCarrierList()) {
+        for (Carrier carrier : carriers.getCarrierList()) {
             if (ConstraintsManager.isCarrierFeasible(carrier, route)) {
                 if (carrier.getCapacity() >= bestDispatchNum && carrier.getMinRatioCapacity() <= bestDispatchNum) {
                     setConstraint1(0, carrier);
@@ -236,10 +204,10 @@ public class LoadingAlgorithm {
     /// /        }
 //    }
     public void chooseBetterCarrierFromConstDist() {
-        HashMap<Integer, Integer> loads1 = this.dispatchNum2loads(minConstDist1_carrier.getCapacity(), route.isLongDistance());
-        HashMap<Integer, Integer> loads2 = this.dispatchNum2loads(minConstDist2_carrier.getMinRatioCapacity(), route.isLongDistance());
-        double value1 = objCal.calculateDualObj(loads1, minConstDist1_carrier, minConstDist1_carrier.getCapacity(), fenceIndexList);
-        double value2 = objCal.calculateDualObj(loads2, minConstDist2_carrier, minConstDist2_carrier.getMinRatioCapacity(), fenceIndexList);
+        HashMap<Integer, Double> loads1 = this.dispatchNum2loads(minConstDist1_carrier.getCapacity());
+        HashMap<Integer, Double> loads2 = this.dispatchNum2loads(minConstDist2_carrier.getMinRatioCapacity());
+        double value1 = PriceCalculator.calculateDualObj(loads1, minConstDist1_carrier, minConstDist1_carrier.getCapacity(), fenceIndexList);
+        double value2 = PriceCalculator.calculateDualObj(loads2, minConstDist2_carrier, minConstDist2_carrier.getMinRatioCapacity(), fenceIndexList);
         if (value1 >= value2) {
             bestLoads = loads1;
             orderCarrier = minConstDist1_carrier;
@@ -249,12 +217,12 @@ public class LoadingAlgorithm {
         }
     }
 
-    public void setConstraint1(int value, Carrier carrier) {
+    public void setConstraint1(double value, Carrier carrier) {
         minConsDist1 = value;
         minConstDist1_carrier = carrier;
     }
 
-    public void setConstraint2(int value, Carrier carrier) {
+    public void setConstraint2(double value, Carrier carrier) {
         minConsDist2 = value;
         minConstDist2_carrier = carrier;
     }

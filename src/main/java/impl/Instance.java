@@ -12,6 +12,8 @@ import java.util.List;
 public class Instance {
     private ArrayList<Order> orderList;
     private Fences fences;
+    private Carriers carriers;
+    private Depots depots;
     private Map fenceMap;
     private ArrayList<Carrier> carrierList;
     private

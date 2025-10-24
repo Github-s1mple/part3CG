@@ -2,126 +2,82 @@ package algo;
 
 import lombok.Getter;
 import lombok.Setter;
+
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
 
-/**
- * 标签类：适配只卸问题的双向标签搜索，使用Lombok简化getter/setter
- */
-@Getter
 @Setter
+@Getter
 public class Label {
-    // 核心状态字段（只卸问题适配）
-    private final boolean isForward;          // 是否为前向标签（true=从起点扩展，false=从终点反向扩展）
-    private final int curFence;               // 当前所在围栏索引
-    private final Label parent;               // 父标签（用于回溯路径）
-    private final BitSet tabu;                // 禁忌表（已访问围栏）
-    private double unloadedQuantity;          // 累计卸货量（核心字段）
-    private double travelDistance;            // 累计行驶距离
-    private int visitNum;                     // 累计访问卸货点数量
-    private String rfId;                      // 所属区域ID
-    private int minUnloadNum;                 // 累计最小卸货数
-    private int smallLoadedN;                 // 累计小型卸货点数量
+    // 核心字段（与调用参数对应）
+    private final boolean isForward;          // 是否前向标签
+    private final int curFence;               // 当前节点（仓库/卸货点索引）
+    private final Label parent;               // 父标签
+    private final BitSet tabu;                // 禁忌表（已访问节点）
+    private final double loadedQuantity;    // 累计卸货量
+    private final double travelDistance;      // 累计距离
+    private final int visitNum;               // 访问卸货点数量
+    private int startDepotIdx;                // 起点仓库索引（多起点场景核心）
 
-    // 辅助字段
-    private List<Integer> fenceIndexList;     // 路径缓存（从起点/终点到当前围栏）
-    private double dualCost;                  // 列生成reduced cost
+    // 辅助字段（路径回溯）
+    private List<Integer> fenceIndexList;     // 路径节点列表
 
-    /**
-     * 构造方法：直接初始化核心字段，通过setter补充非必要字段
-     * @param isForward 是否前向标签
-     * @param curFence 当前围栏索引
-     * @param parent 父标签
-     * @param tabu 禁忌表（需提前克隆）
-     */
-    public Label(boolean isForward, int curFence, Label parent, BitSet tabu) {
+
+    // 私有构造方法（仅由 generate 调用）
+    private Label(boolean isForward, int curFence, Label parent, BitSet tabu,
+                  double loadedQuantity, double travelDistance, int visitNum) {
         this.isForward = isForward;
         this.curFence = curFence;
         this.parent = parent;
         this.tabu = tabu;
-
-        // 初始化默认值
-        this.unloadedQuantity = 0.0;
-        this.travelDistance = 0.0;
-        this.visitNum = 0;
-        this.minUnloadNum = 0;
-        this.smallLoadedN = 0;
-        this.fenceIndexList = generateFenceIndexList();
-        this.dualCost = 0.0;
-
-        // 校验禁忌表必须包含当前围栏
-        if (!tabu.get(curFence)) {
-            throw new IllegalArgumentException("禁忌表必须包含当前围栏: " + curFence);
-        }
+        this.loadedQuantity = loadedQuantity;
+        this.travelDistance = travelDistance;
+        this.visitNum = visitNum;
+        this.fenceIndexList = generatePath(); // 初始化路径
     }
 
-    /**
-     * 生成路径缓存：从父标签继承路径并添加当前围栏
-     */
-    private List<Integer> generateFenceIndexList() {
+
+    // 静态工厂方法：生成标签（与调用参数完全匹配）
+    public static Label generate(boolean isForward, int curFence, Label parent, BitSet tabu,
+                                 double loadedQuantity, double travelDistance, int visitNum) {
+        // 参数校验（避免无效标签）
+        validateParams(curFence, tabu, loadedQuantity, travelDistance, visitNum);
+        // 创建并返回标签实例
+        return new Label(isForward, curFence, parent, tabu, loadedQuantity,
+                travelDistance, visitNum);
+    }
+
+
+    // 路径生成：从父标签继承路径，追加当前节点
+    private List<Integer> generatePath() {
         List<Integer> path = new ArrayList<>();
         if (parent != null) {
+            // 复制父标签路径（避免引用冲突）
             path.addAll(parent.getFenceIndexList());
         }
-        path.add(this.curFence);
+        path.add(this.curFence); // 追加当前节点
         return path;
     }
 
-    /**
-     * 判断是否为初始标签（无父标签）
-     */
-    public boolean isInitialLabel() {
-        return parent == null;
-    }
 
-    /**
-     * 更新路径缓存（当父标签路径变化时调用）
-     */
-    public void refreshFenceIndexList() {
-        this.fenceIndexList = generateFenceIndexList();
-    }
-
-    /**
-     * 复制标签（用于扩展新标签时避免引用冲突）
-     */
-    public Label copy() {
-        BitSet newTabu = (BitSet) this.tabu.clone();
-        Label copy = new Label(this.isForward, this.curFence, this.parent, newTabu);
-        copy.setUnloadedQuantity(this.unloadedQuantity);
-        copy.setTravelDistance(this.travelDistance);
-        copy.setVisitNum(this.visitNum);
-        copy.setRfId(this.rfId);
-        copy.setMinUnloadNum(this.minUnloadNum);
-        copy.setSmallLoadedN(this.smallLoadedN);
-        copy.setDualCost(this.dualCost);
-        return copy;
-    }
-
-    // ========================= 内部成本计算器接口 =========================
-    public interface LabelCostCalculator {
-        double calculateDualCost(Label label, double[] dualValues);
-    }
-
-    /**
-     * 只卸问题的成本计算器
-     */
-    public static class UnloadingCostCalculator implements LabelCostCalculator {
-        private final double distanceCostCoeff;
-
-        public UnloadingCostCalculator(double distanceCostCoeff) {
-            this.distanceCostCoeff = distanceCostCoeff;
+    // 参数校验：确保核心字段合法
+    private static void validateParams(int curFence, BitSet tabu,
+                                       double unloadedQuantity, double travelDistance, int visitNum) {
+        if (curFence < 0) {
+            throw new IllegalArgumentException("当前节点索引不能为负：" + curFence);
         }
-
-        @Override
-        public double calculateDualCost(Label label, double[] dualValues) {
-            // 成本 = 距离成本 - 卸货点对偶收益
-            double pathCost = label.getTravelDistance() * distanceCostCoeff;
-            double dualProfit = 0.0;
-            for (int fenceIdx : label.getFenceIndexList()) {
-                dualProfit += dualValues[fenceIdx];
-            }
-            return pathCost - dualProfit;
+        if (!tabu.get(curFence)) {
+            throw new IllegalArgumentException("禁忌表必须包含当前节点：" + curFence);
+        }
+        if (unloadedQuantity < 0) {
+            throw new IllegalArgumentException("卸货量不能为负：" + unloadedQuantity);
+        }
+        if (travelDistance < 0) {
+            throw new IllegalArgumentException("行驶距离不能为负：" + travelDistance);
+        }
+        if (visitNum < 0) {
+            throw new IllegalArgumentException("访问次数不能为负：" + visitNum);
         }
     }
 }

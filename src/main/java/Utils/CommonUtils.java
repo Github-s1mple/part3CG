@@ -87,4 +87,10 @@ public class CommonUtils {
 
         return list.subList(startIndex, endIndex);
     }
+
+    public static void displayOrders(List<Order> orderPool) {
+        for (Order order : orderPool) {
+            return;
+        }
+    }
 }
