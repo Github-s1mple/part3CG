@@ -20,8 +20,18 @@ public class Fence {
     private double maxDispatchNum;
     private ArrayList<Integer> vaildArcFence;
     private double nearestDiffLabelDist;
+    private String constName;
+    private double originalFenceValue;
 
-    public Fence(Integer index) {}
+    public Fence(Integer index, Double totalDemand, Double selfDemand, Double depotDemand, Double deliverDemand) {
+        this.index = index;
+        this.totalDemand = totalDemand;
+        this.selfDemand = selfDemand;
+        this.depotDemand = depotDemand;
+        this.deliverDemand = deliverDemand;
+        this.distanceMap = new HashMap<>();
+        this.constName = null;
+    }
     public Integer getIndex() {
         return index;
     }
@@ -40,4 +50,5 @@ public class Fence {
     public Double getDistance(Fence endFence) {
         return this.distanceMap.get(endFence.getIndex());
     }
+
 }

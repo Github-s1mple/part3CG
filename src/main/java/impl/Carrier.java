@@ -12,4 +12,7 @@ public class Carrier {
     private Double maxDistance;
     private Integer depot;
     private Double minRatioCapacity;
+    private double carrierValue;
+    private String constName;
+    private Integer maxResource;
 }

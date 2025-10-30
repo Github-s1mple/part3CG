@@ -9,7 +9,7 @@ import java.util.HashMap;
 @Setter
 @Getter
 public class Order {
-    private int orderCnt;
+    private Integer orderId;
     private double distance;
     private int fenceNumber;
     private HashMap<Integer, Double> loads;
@@ -22,8 +22,8 @@ public class Order {
     private double totalValue;
     private double dualObj;
 
-    public Order(Route route, HashMap<Integer, Double> loads, Carrier carrier, int orderCnt) {
-        this.orderCnt = orderCnt;
+    public Order(Route route, HashMap<Integer, Double> loads, Carrier carrier, Integer orderId) {
+        this.orderId = orderId;
         this.loads = loads;
         this.distance = route.getDistance();
         this.fenceNumber = route.getVisitNumber();
