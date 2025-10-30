@@ -1,7 +1,7 @@
 package algo;
-
+/*
 public class old {
-    /* 双向标号搜索 */
+    /* 双向标号搜索
     private void bidirectionalSearch(boolean isLongDistance) {
         int iterationCnt = 0;
         while (true) {
@@ -170,7 +170,7 @@ public class old {
         }
     }
 
-    /* 标号连接 */
+    /* 标号连接
     private void labelConnect(Label forwardLabel, Label backwardLabel, boolean isLongDistance) {
         Fence forward_last_fence = fences.getFence(forwardLabel.getCurFence());
         Fence backward_first_fence = fences.getFence(backwardLabel.getCurFence());
@@ -307,3 +307,4 @@ public class old {
         return order;
     }在我的代码上进行修改，并讲述原理
 }
+*/

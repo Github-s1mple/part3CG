@@ -16,8 +16,5 @@ public class Instance {
     private Depots depots;
     private Map fenceMap;
     private ArrayList<Carrier> carrierList;
-    private
 
-    public IObjectiveCalculator getObjCal() {
-    }
 }
