@@ -15,7 +15,7 @@ public class OriginalSolve {
             cg.setOutputFlag(true);
             List<Order> allColumns = cg.solve(); // 列生成所有列
 
-            // 2. 调用最终主问题求解器（注意类名与之前定义一致，这里假设是RLMPFinalSolver）
+            // 2. 调用最终主问题求解器（注意类名与之前定义一致，这里假设是FinalSolver）
             RLMPSolve finalSolver = new RLMPSolve(allColumns, instance);
             List<Order> optimalOrders = finalSolver.solveRLMP(); // 最优订单组合
 
