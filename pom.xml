@@ -21,6 +21,16 @@
                     </annotationProcessorPaths>
                 </configuration>
             </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <version>3.8.1</version>
+                <configuration>
+                    <source>21</source> <!-- 你的JDK版本 -->
+                    <target>21</target>
+                    <encoding>UTF-8</encoding> <!-- 强制编译编码 -->
+                </configuration>
+            </plugin>
         </plugins>
     </build>
     <groupId>org.example</groupId>
@@ -46,6 +56,16 @@
             <groupId>com.gurobi</groupId>
             <artifactId>gurobi</artifactId>
             <version>12.0.3</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>5.2.4</version>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.logging.log4j</groupId>
+            <artifactId>log4j-core</artifactId>
+            <version>2.20.0</version>
         </dependency>
     </dependencies>
 </project>

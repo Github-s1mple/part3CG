@@ -1,15 +1,20 @@
 package impl;
 
-import baseinfo.Map;
+import baseinfo.Constants;
+import baseinfo.MapDistance;
 import lombok.Getter;
 import lombok.Setter;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
+
 @Setter
 @Getter
 public class Fence {
     private Integer index;
+    private Double lon;
+    private Double lat;
     private Double totalDemand;
     private Double selfDemand;
     private Double depotDemand;
@@ -23,24 +28,29 @@ public class Fence {
     private String constName;
     private double originalFenceValue;
 
-    public Fence(Integer index, Double totalDemand, Double selfDemand, Double depotDemand, Double deliverDemand) {
+    public Fence(Integer index, Double Lon, Double Lat, Double totalDemand, Double selfDemand, Double depotDemand, Double deliverDemand) {
         this.index = index;
+        this.lon = Lon;
+        this.lat = Lat;
         this.totalDemand = totalDemand;
         this.selfDemand = selfDemand;
         this.depotDemand = depotDemand;
         this.deliverDemand = deliverDemand;
         this.distanceMap = new HashMap<>();
-        this.constName = null;
-    }
-    public Integer getIndex() {
-        return index;
+        this.constName = "F" + index;
+        this.vaildArcFence = new ArrayList<>();
     }
 
-    public void createDistanceMap(Map map) {
-        ArrayList<Double> distanceList = map.getMapList().get(index);
-        for (int i = 0; i < distanceList.size(); i++) {
-            this.distanceMap.put(i,  distanceList.get(i));
+    public void generateDistanceMap(List<List<Double>> distanceMatrix){
+        List<Double> distances = distanceMatrix.get(index);
+        for (int targetIndex = 0; targetIndex < distances.size(); targetIndex++) {
+            Double distance = distances.get(targetIndex);
+            distanceMap.put(targetIndex, distance); // 或根据业务逻辑处理
+            if (distance <= Constants.MAXDISTANCE / 2){
+                vaildArcFence.add(targetIndex);
+            }
         }
+        vaildArcFence.add(999);
     }
 
     public Double getDistance(Integer endFence) {

@@ -14,5 +14,17 @@ public class Carrier {
     private Double minRatioCapacity;
     private double carrierValue;
     private String constName;
-    private Integer maxResource;
+    private Integer maxUseTimes;
+
+    public Carrier(Integer index, Double capacity, Double price, Double maxDistance, Integer depot, Double minRatioCapacity) {
+        this.index = index;
+        this.capacity = capacity;
+        this.price = price;
+        this.maxDistance = maxDistance;
+        this.depot = depot;
+        this.minRatioCapacity = minRatioCapacity;
+        this.carrierValue = 0.0;
+        this.constName = "C" + index;
+        this.maxUseTimes = 1;
+    }
 }

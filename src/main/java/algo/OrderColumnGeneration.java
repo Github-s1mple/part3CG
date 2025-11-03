@@ -19,15 +19,12 @@ import java.util.List;
 @Setter
 @Getter
 public class OrderColumnGeneration {
-    final Instance instance;
-    final Fences fences;
-    public Boolean outputFlag = false;
-
-    @Setter
+    private final Instance instance;
+    private final Fences fences;
+    private final Depots depots;
+    private Boolean outputFlag = false;
     private Integer iterationTimeLimit = Integer.MAX_VALUE;
     private Integer startTime;
-
-    @Getter
     private Integer iterationCnt;
 
     final HashMap<String, Double> dualsOfRLMP;
@@ -45,6 +42,7 @@ public class OrderColumnGeneration {
     public OrderColumnGeneration(Instance instance) throws GRBException {
         this.instance = instance;
         this.fences = instance.getFences();
+        this.depots = instance.getDepots();
         this.dualsOfRLMP = new HashMap<>();
         this.RLMPVariables = new HashMap<>();
         this.orderIdMap = new HashMap<>(); // 初始化订单映射
@@ -69,6 +67,11 @@ public class OrderColumnGeneration {
         for (Fence fence : fences.getFenceList()) {
             this.dualsOfRLMP.put(fence.getConstName(), 0.0);
         }
+
+        for (Depot depot : depots.getDepotList()) {
+            this.dualsOfRLMP.put(depot.getConstName(), 0.0);
+        }
+
         for (Carrier carrier : instance.getCarrierList()) {
             this.dualsOfRLMP.put(carrier.getConstName(), 0.0);
         }
@@ -94,7 +97,7 @@ public class OrderColumnGeneration {
             String constName = carrier.getConstName();
             GRBLinExpr emptyExpr = new GRBLinExpr();
             GRBConstr constr = RLMPSolver.addConstr(
-                    emptyExpr, GRB.LESS_EQUAL, carrier.getMaxResource(), constName
+                    emptyExpr, GRB.LESS_EQUAL, carrier.getMaxUseTimes(), constName
             );
             constraintsMap.put(constName, constr);
         }
@@ -142,12 +145,10 @@ public class OrderColumnGeneration {
         return orders;
     }
 
-
     private List<Order> generateOrders() {
         this.bidLabeling.setTimeLimit(this.getIterationTimeLimitLeft());
         return this.bidLabeling.solve(dualsOfRLMP);
     }
-
 
     private void displayIterationInformation() throws GRBException {
         if (RLMPSolver.get(GRB.IntAttr.SolCount) == 0) {
@@ -292,10 +293,10 @@ public class OrderColumnGeneration {
 
         // 3. 添加新约束（右边界=承运人最大资源）
         GRBConstr newConstr = RLMPSolver.addConstr(
-                expr, GRB.LESS_EQUAL, carrier.getMaxResource(), constName
+                expr, GRB.LESS_EQUAL, carrier.getMaxUseTimes(), constName
         );
         constraintsMap.put(constName, newConstr);
-        System.out.println("重建承运人约束：" + constName + "，最大资源：" + carrier.getMaxResource());
+        System.out.println("重建承运人约束：" + constName + "，最大资源：" + carrier.getMaxUseTimes());
     }
 
 
