@@ -1,7 +1,6 @@
 package impl;
 
 import baseinfo.Constants;
-import baseinfo.MapDistance;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -19,6 +18,7 @@ public class Fence {
     private Double selfDemand;
     private Double depotDemand;
     private Double deliverDemand;
+    private Double originalFenceValue;
     private HashMap<Integer, Double> distanceMap;
     private double fenceValue;
     private double minDispatchNum;
@@ -26,9 +26,8 @@ public class Fence {
     private ArrayList<Integer> vaildArcFence;
     private double nearestDiffLabelDist;
     private String constName;
-    private double originalFenceValue;
 
-    public Fence(Integer index, Double Lon, Double Lat, Double totalDemand, Double selfDemand, Double depotDemand, Double deliverDemand) {
+    public Fence(Integer index, Double Lon, Double Lat, Double totalDemand, Double selfDemand, Double depotDemand, Double deliverDemand, Double unitPrice) {
         this.index = index;
         this.lon = Lon;
         this.lat = Lat;
@@ -39,6 +38,7 @@ public class Fence {
         this.distanceMap = new HashMap<>();
         this.constName = "F" + index;
         this.vaildArcFence = new ArrayList<>();
+        this.originalFenceValue = unitPrice;
     }
 
     public void generateDistanceMap(List<List<Double>> distanceMatrix){

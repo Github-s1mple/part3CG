@@ -1,7 +1,6 @@
 package Utils;
 
 import baseinfo.Constants;
-import baseinfo.MapDistance;
 import impl.Carrier;
 import impl.Depot;
 import impl.Fence;
@@ -11,16 +10,21 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 
+import static baseinfo.MapDistance.calculateSphericalDistance;
+
 public class Initializer {
-    private static int fenceNum;
-    private static int depotNum;
-    private static int carrierNum;
-    public static ArrayList<Fence> fenceInitializer(List<List<Double>> distanceMatrix) {
+    private int fenceNum;
+    private int depotNum;
+    private int carrierNum;
+    private ArrayList<Fence> fenceList;
+    private ArrayList<Depot> depotList;
+    private ArrayList<Carrier> carrierList;
+
+    public ArrayList<Fence> fenceInitializer(List<List<Double>> distanceMatrix) {
         System.out.println("开始初始化围栏...");
-        ArrayList<Fence> fenceList = new ArrayList<>();
+        fenceList = new ArrayList<>();
 
         try (FileInputStream fis = new FileInputStream(Constants.allPointsFilePath);
              Workbook workbook = new XSSFWorkbook(fis)) {
@@ -52,10 +56,13 @@ public class Initializer {
                             totalDemand,
                             selfDemand,
                             depotDemand,
-                            deliverDemand
+                            deliverDemand,
+                            0.0
                     );
 
                     fence.generateDistanceMap(distanceMatrix);
+                    double nearestDepotDistance = calNearestDepotDistance(fence, depotList);
+                    fence.setOriginalFenceValue(nearestDepotDistance * Constants.DEPOTDISTANCETOFENCEVALUE);
                     fenceList.add(fence);
 
                 } catch (Exception e) {
@@ -74,14 +81,14 @@ public class Initializer {
         return fenceList;
     }
 
-    public static ArrayList<Depot> depotInitializer(List<double[]> fenceCoordinates) {
+    public ArrayList<Depot> depotInitializer(List<double[]> fenceCoordinates) {
         System.out.println("开始初始化仓库地图...");
         if (fenceCoordinates == null || fenceCoordinates.isEmpty()) {
             System.err.println("围栏坐标为空，无法创建Depot");
             return new ArrayList<>();
         }
 
-        ArrayList<Depot> depots = new ArrayList<>();
+        depotList = new ArrayList<>();
         try (FileInputStream fis = new FileInputStream(Constants.candidatePointsFilePath);
              Workbook workbook = WorkbookFactory.create(fis)) {
 
@@ -103,18 +110,18 @@ public class Initializer {
                 // 创建Depot并计算到所有围栏的距离
                 Depot depot = new Depot(rowNum, depotLon, depotLat);
                 depot.generateDistanceMap(fenceCoordinates);
-                depots.add(depot);
+                depotList.add(depot);
             }
         } catch (IOException e) {
             System.err.println("读取候选点失败：" + e.getMessage());
             return new ArrayList<>();
         }
-        depotNum = depots.size();
-        System.out.println("成功生成仓库数：" + depots.size());
-        return depots;
+        depotNum = depotList.size();
+        System.out.println("成功生成仓库数：" + depotList.size());
+        return depotList;
     }
 
-    public static ArrayList<Carrier> carrierInitializer(boolean isDifferentCarrier) {
+    public ArrayList<Carrier> carrierInitializer(boolean isDifferentCarrier) {
         System.out.println("开始初始化载具...");
         ArrayList<Carrier> carrierList = new ArrayList<>();
         if (isDifferentCarrier) {
@@ -135,7 +142,6 @@ public class Initializer {
                     Carrier carrier = new Carrier(
                             currentIndex,
                             capacity,
-                            price,
                             maxDistance,
                             currentIndex,
                             minRatioCapacity
@@ -155,7 +161,7 @@ public class Initializer {
     /**
      * 安全获取单元格的字符串值
      */
-    private static double getCellValueAsDouble(Cell cell) {
+    private double getCellValueAsDouble(Cell cell) {
         if (cell == null) {
             return Double.NaN; // 单元格为空返回无效值
         }
@@ -183,7 +189,7 @@ public class Initializer {
     /**
      * 安全获取单元格的数值（默认0.0）
      */
-    private static double getCellNumericValue(Cell cell) {
+    private double getCellNumericValue(Cell cell) {
         if (cell == null) return 0.0;
         try {
             if (cell.getCellType() == CellType.NUMERIC) {
@@ -195,5 +201,19 @@ public class Initializer {
             throw new RuntimeException("单元格数值解析失败：" + e.getMessage());
         }
         return 0.0;
+    }
+
+    private double calNearestDepotDistance(Fence fence, List<Depot> depotList) {
+        double minDistance = Double.MAX_VALUE;
+        double fenceLon = fence.getLon(); // 假设Fence有getLon()方法
+        double fenceLat = fence.getLat(); // 假设Fence有getLat()方法
+
+        for (Depot depot : depotList) {
+            double distance = calculateSphericalDistance(depot.getLatitude(), depot.getLongitude(), fenceLat, fenceLon);
+            if (distance < minDistance) {
+                minDistance = distance;
+            }
+        }
+        return minDistance;
     }
 }

@@ -26,8 +26,8 @@ public class CommonUtils {
      */
     public static final Comparator<Order> dualComparator = (order1, order2) -> {
         // 假设Order类有getDualValue()方法获取对偶值
-        double dual1 = order1.getDualValue();
-        double dual2 = order2.getDualValue();
+        double dual1 = order1.getReducedCost();
+        double dual2 = order2.getReducedCost();
 
         // 降序排列（大的在前）
         return Double.compare(dual2, dual1);

@@ -59,7 +59,7 @@ public class Depot {
     }
 
     public Fence depot2Fence(){
-        Fence fence = new Fence(999, longitude, latitude, 0.0, 0.0, 0.0, 0.0);
+        Fence fence = new Fence(999, longitude, latitude, 0.0, 0.0, 0.0, 0.0, 0.0);
         fence.setDistanceMap(depotMap);
         fence.setFenceValue(depotValue);
         fence.setMinDispatchNum(0.0);
@@ -67,7 +67,6 @@ public class Depot {
         fence.setVaildArcFence(vaildArcFence);
         fence.setNearestDiffLabelDist(nearestDiffLabelDist);
         fence.setConstName("ND" + index);
-        fence.setOriginalFenceValue(originalDepotValue);
         return fence;
     }
 }

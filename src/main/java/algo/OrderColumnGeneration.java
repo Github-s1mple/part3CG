@@ -67,6 +67,7 @@ public class OrderColumnGeneration {
 
         // 初始化对偶值（避免后续空指针，初始设为0）
         initDualValues();
+        this.bidLabeling.setDualsOfRLMP(dualsOfRLMP);
     }
 
 
@@ -115,7 +116,7 @@ public class OrderColumnGeneration {
         for (Carrier carrier : instance.getCarrierList()) {
             this.dualsOfRLMP.put(carrier.getConstName(), 0.0);
         }
-        // 仓库约束（若有，此处保持原逻辑）
+        // 仓库约束(TODO未添加)
         for (Depot depot : depots.getDepotList()) {
             this.dualsOfRLMP.put(depot.getConstName(), 0.0);
         }
@@ -237,7 +238,7 @@ public class OrderColumnGeneration {
             double pathProfit = order.getPrice(); // 目标函数系数=路径收益（最大化）
             GRBVar pathVar = RLMPSolver.addVar(
                     0.0,                // 下界：不选该路径
-                    1.0,                // 上界：选该路径（一次只能选一次）
+                    1.0,                // 上界：仅允许一次访问
                     pathProfit,         // 目标系数：路径收益
                     GRB.CONTINUOUS,     // 列生成松弛：连续变量；整数解时改GRB.BINARY
                     "path_" + orderId   // 变量名：明确为路径变量，便于调试

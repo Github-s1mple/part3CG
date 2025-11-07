@@ -8,7 +8,6 @@ import lombok.Setter;
 public class Carrier {
     private Integer index;
     private Double capacity;
-    private Double price;
     private Double maxDistance;
     private Integer depot;
     private Double minRatioCapacity;
@@ -16,10 +15,9 @@ public class Carrier {
     private String constName;
     private Integer maxUseTimes;
 
-    public Carrier(Integer index, Double capacity, Double price, Double maxDistance, Integer depot, Double minRatioCapacity) {
+    public Carrier(Integer index, Double capacity, Double maxDistance, Integer depot, Double minRatioCapacity) {
         this.index = index;
         this.capacity = capacity;
-        this.price = price;
         this.maxDistance = maxDistance;
         this.depot = depot;
         this.minRatioCapacity = minRatioCapacity;

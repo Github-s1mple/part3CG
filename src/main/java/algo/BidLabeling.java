@@ -44,7 +44,8 @@ public class BidLabeling {
     private List<Order> orderPool = new ArrayList<>(); // 最终订单池
     private final List<Carrier> carrierList;           // 车型列表（原代码已引用）
     private final LoadingAlgorithm loadingAlgorithm;   // 装卸方案求解器（原代码已引用）
-    private final double dual_multiplier;              // 对偶乘数（原代码已引用）
+    private final double dual_multiplier;
+    private HashMap<String, Double> dualsOfRLMP; // 当前对偶信息
 
     // 算法运行状态
     private int startTime;  // 算法开始时间（秒级）
@@ -107,6 +108,7 @@ public class BidLabeling {
         this.startTime = CommonUtils.currentTimeInSecond();
         this.bestObj = 0.0;
         this.timeRecord = 0.0;
+        this.dualsOfRLMP = dualsOfRLMP;
         // 更新围栏价值
         this.updateFenceValue(dualsOfRLMP);
         // 若初始orderPool超出orderLimit直接输出
@@ -175,9 +177,9 @@ public class BidLabeling {
         }
 
         for (Order order : this.orderPool) {
-            order.setDualObj(PriceCalculator.calculateDualObj(order));
+            order.setReducedCost(PriceCalculator.calculateRC(order, dualsOfRLMP));
         }
-        // filter orders according to new obj
+
         orderPool.sort(CommonUtils.dualComparator);
     }
 
@@ -433,6 +435,7 @@ public class BidLabeling {
 
         // 构造完整路径
         Route route = Route.generate(
+                fences,
                 totalDist,
                 totalVisitNum,
                 fenceIndexList,
@@ -460,7 +463,7 @@ public class BidLabeling {
             return;
         }
 
-        order.setDualObj(PriceCalculator.calculateDualObj(order));
+        order.setReducedCost(PriceCalculator.calculateRC(order, dualsOfRLMP));
         // 连接成功
         if (sameNodeSetOrder != null) {
             this.orderPool.remove(sameNodeSetOrder); // 去除路径被支配的工单

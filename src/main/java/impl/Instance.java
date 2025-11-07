@@ -20,6 +20,7 @@ public class Instance {
     private ArrayList<Carrier> carrierList;
     private List<List<Double>> distanceMatrix;
     private List<double[]> depotMap;
+    private Initializer initializer;
 
     public Instance() {
         distanceMatrix = MapDistance.initialDistanceMatrix();
@@ -27,11 +28,12 @@ public class Instance {
         fences = new Fences();
         depots = new Depots();
         carriers = new Carriers();
-        fences.setFenceList(Initializer.fenceInitializer(distanceMatrix));
-        depots.setDepotList(Initializer.depotInitializer(depotMap));
+        initializer = new Initializer();
+        depots.setDepotList(initializer.depotInitializer(depotMap));
+        fences.setFenceList(initializer.fenceInitializer(distanceMatrix));
         fences.generateFenceIndexList();
         depots.generateDepotIndexList();
-        carrierList = Initializer.carrierInitializer(Constants.ISDIFFERENTCARRIER);
+        carrierList = initializer.carrierInitializer(Constants.ISDIFFERENTCARRIER);
         carriers.setCarrierList(carrierList);
         orderList = null;
     }
