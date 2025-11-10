@@ -33,6 +33,7 @@ public class Depot {
         this.depotMap = new HashMap<>();
         this.vaildArcFence = new ArrayList<>();
         this.constName = "D" + index;
+        this.nearestDiffLabelDist = 9999.0;
     }
 
     public void generateDistanceMap(List<double[]> fenceCoordinates){
@@ -58,8 +59,8 @@ public class Depot {
         return this.depotMap.get(endFence.getIndex());
     }
 
-    public Fence depot2Fence(){
-        Fence fence = new Fence(999, longitude, latitude, 0.0, 0.0, 0.0, 0.0, 0.0);
+    public Fence depot2Fence(Integer index){
+        Fence fence = new Fence(index, longitude, latitude, 0.0, 0.0, 0.0, 0.0, 0.0, false);
         fence.setDistanceMap(depotMap);
         fence.setFenceValue(depotValue);
         fence.setMinDispatchNum(0.0);

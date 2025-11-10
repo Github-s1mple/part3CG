@@ -3,11 +3,10 @@ package algo;
 import impl.Instance;
 import impl.Order;
 
-import java.util.HashMap;
 import java.util.List;
 import com.gurobi.gurobi.GRBException;
 
-public class OriginalSolve {
+public class CGSolve {
     public void solve(Instance instance) {
         try {
             // 1. 初始化列生成算法

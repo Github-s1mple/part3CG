@@ -26,11 +26,8 @@ public class DistanceCalculator {
                 Row row = sheet.getRow(rowNum);
                 if (row == null) continue; // 跳过空行
 
-                // 根据你的XLSX格式：
-                // A列：Gridid（索引0），B列：HBlon（索引1），C列：HBlat（索引2）
-                Cell lonCell = row.getCell(1);  // HBlon所在列
-                Cell latCell = row.getCell(2);  // HBlat所在列
-
+                Cell lonCell = row.getCell(1);
+                Cell latCell = row.getCell(2);
                 if (lonCell == null || latCell == null) continue; // 跳过经纬度为空的行
 
                 // 解析经纬度（确保单元格格式为数字）
@@ -45,7 +42,7 @@ public class DistanceCalculator {
             // 计算距离矩阵
             List<List<Double>> distanceMatrix = MapDistance.calculateDistanceMatrix(coordinates);
 
-            System.out.println("距离矩阵大小: " + distanceMatrix.size() + "x" + distanceMatrix.get(0).size());
+            System.out.println("距离矩阵大小: " + distanceMatrix.size() + "x" + distanceMatrix.getFirst().size());
 
         } catch (IOException e) {
             System.err.println("读取XLSX文件时出错: " + e.getMessage());

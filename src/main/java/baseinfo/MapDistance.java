@@ -7,6 +7,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import org.apache.poi.ss.usermodel.*;
 
@@ -15,21 +16,13 @@ import org.apache.poi.ss.usermodel.*;
 public class MapDistance {
     private ArrayList<ArrayList<Double>> mapList;
 
-    public  ArrayList<ArrayList<Double>> getMapList() {
-        return mapList;
-    }
-
-    public double getDistance(Integer startFence, Integer endFence){
-        return 0.0;
-    }
-
     public static List<List<Double>> calculateDistanceMatrix(List<double[]> coordinates) {
         List<List<Double>> matrix = new ArrayList<>();
         int n = coordinates.size();
 
-        for (int i = 0; i < n; i++) {
+        for (double[] coordinate : coordinates) {
             List<Double> row = new ArrayList<>();
-            double[] point1 = coordinates.get(i);
+            double[] point1 = coordinate;
 
             for (int j = 0; j < n; j++) {
                 double[] point2 = coordinates.get(j);
@@ -69,8 +62,8 @@ public class MapDistance {
 
     public static List<List<Double>> initialDistanceMatrix() {
         System.out.println("开始生成距离矩阵...");
-        // XLSX文件路径（替换为你的文件路径）
-        String xlsxFilePath = Constants.allPointsFilePath;
+        // XLSX文件路径
+        String xlsxFilePath = (Objects.equals(Constants.ALGOMODE, "CG") ? Constants.allPointsFilePath : Constants.allPointsTestFilePath);
 
         // 存储所有点的经纬度（lon, lat）
         List<double[]> coordinates = new ArrayList<>();
@@ -86,11 +79,8 @@ public class MapDistance {
                 Row row = sheet.getRow(rowNum);
                 if (row == null) continue; // 跳过空行
 
-                // 根据你的XLSX格式：
-                // A列：Gridid（索引0），B列：HBlon（索引1），C列：HBlat（索引2）
-                Cell lonCell = row.getCell(1);  // HBlon所在列
-                Cell latCell = row.getCell(2);  // HBlat所在列
-
+                Cell lonCell = row.getCell(1);
+                Cell latCell = row.getCell(2);
                 if (lonCell == null || latCell == null) continue; // 跳过经纬度为空的行
 
                 // 解析经纬度（确保单元格格式为数字）
@@ -105,7 +95,7 @@ public class MapDistance {
             // 计算距离矩阵
             List<List<Double>> distanceMatrix = calculateDistanceMatrix(coordinates);
 
-            System.out.println("距离矩阵大小: " + distanceMatrix.size() + "x" + distanceMatrix.get(0).size());
+            System.out.println("距离矩阵大小: " + distanceMatrix.size() + "x" + distanceMatrix.getFirst().size());
             return distanceMatrix;
         } catch (IOException e) {
             System.err.println("读取XLSX文件时出错: " + e.getMessage());
@@ -119,7 +109,7 @@ public class MapDistance {
 
     public static List<double[]> initialDepotMap() {
         List<double[]> fenceCoordinates = new ArrayList<>();
-        try (FileInputStream fis = new FileInputStream(Constants.allPointsFilePath);
+        try (FileInputStream fis = new FileInputStream(Objects.equals(Constants.ALGOMODE, "CG") ? Constants.allPointsFilePath:Constants.allPointsTestFilePath);
              Workbook workbook = WorkbookFactory.create(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0);

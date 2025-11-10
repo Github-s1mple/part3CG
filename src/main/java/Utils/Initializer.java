@@ -22,11 +22,20 @@ public class Initializer {
     private ArrayList<Depot> depotList;
     private ArrayList<Carrier> carrierList;
 
+    public Initializer() {
+        fenceNum = 0;
+        depotNum = 0;
+        carrierNum = 0;
+        fenceList = new ArrayList<>();
+        depotList = new ArrayList<>();
+        carrierList = new ArrayList<>();
+    }
+
     public ArrayList<Fence> fenceInitializer(List<List<Double>> distanceMatrix) {
         System.out.println("开始初始化围栏...");
         fenceList = new ArrayList<>();
 
-        try (FileInputStream fis = new FileInputStream(Constants.allPointsFilePath);
+        try (FileInputStream fis = new FileInputStream(Constants.ALGOMODE == "CG" ? Constants.allPointsFilePath: Constants.allPointsTestFilePath);
              Workbook workbook = new XSSFWorkbook(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0); // 获取第一个工作表
@@ -89,7 +98,7 @@ public class Initializer {
         }
 
         depotList = new ArrayList<>();
-        try (FileInputStream fis = new FileInputStream(Constants.candidatePointsFilePath);
+        try (FileInputStream fis = new FileInputStream(Constants.ALGOMODE == "CG" ? Constants.candidatePointsFilePath : Constants.candidatePointsTestFilePath);
              Workbook workbook = WorkbookFactory.create(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0);
@@ -127,8 +136,7 @@ public class Initializer {
         if (isDifferentCarrier) {
             System.out.println("当前未提供载具信息");
             return carrierList;
-        }
-        else {
+        } else {
             int index = 0; // 顺序编号，从0开始
             for (index = 0; index < depotNum; index++) {
 

@@ -264,7 +264,7 @@ public class BidLabeling {
         Fence currentFence;
         if (label.getParent() == null){
             Depot depot = depots.getDepot(label.getStartDepotIdx());
-            currentFence = depot.depot2Fence();
+            currentFence = depot.depot2Fence(999);
         }else{
             currentFence = fences.getFence(label.getCurFence());
         }
