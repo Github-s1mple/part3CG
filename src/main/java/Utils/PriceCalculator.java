@@ -2,6 +2,7 @@ package Utils;
 
 import impl.Carrier;
 import impl.Fence;
+import impl.Fences;
 import impl.Order;
 
 import java.util.HashMap;
@@ -9,44 +10,48 @@ import java.util.List;
 import java.util.Map;
 
 public class PriceCalculator {
+    /**
+     * 计算路径检验数（RC）：新增距离约束的对偶值影响
+     * RC = 路径原始收益 - （围栏对偶值影响 + 载具资源对偶值影响 + 载具距离对偶值影响）
+     */
     public static double calculateRC(Order order, HashMap<String, Double> dualsOfRLMP) {
         if (order == null) {
             throw new IllegalArgumentException("Order cannot be null");
         }
 
-        // 2. 获取路径的净收益（price）
+        Carrier carrier = order.getCarrier();
+        if (carrier == null) {
+            throw new IllegalArgumentException("Order must be bound to a carrier");
+        }
+
+        // 1. 路径原始收益（已扣除所有成本，对应order.getPrice()）
         double price = order.getPrice();
 
-        // 3. 获取路径覆盖的客户对偶变量之和（dualValue）
-        double sumFenceDualValues = 0.0;
-        // 遍历每个围栏的装载量，累加总对偶值
+        // 2. 围栏需求约束的对偶值影响：sum(装载量 × 围栏对偶值)
+        double sumFenceDual = 0.0;
+        Fences fences = order.getFences(); // 获取围栏集合
         for (Map.Entry<Integer, Double> entry : order.getLoads().entrySet()) {
-            Integer fenceId = entry.getKey();       // 围栏编号
-            double load = entry.getValue();     // 该围栏的装载量
-
-            // 校验装载量有效性（忽略负数装载量，避免异常值影响）
+            Integer fenceId = entry.getKey();
+            double load = entry.getValue();
             if (load < 0) {
                 System.out.println("警告：围栏" + fenceId + "的装载量为负数（" + load + "），已忽略");
                 continue;
             }
 
-            // 获取围栏对象，检查是否存在
-            Fence fence = order.getFences().getFence(fenceId);
+            Fence fence = fences.getFence(fenceId);
             if (fence == null) {
                 System.out.println("警告：未找到围栏编号" + fenceId + "的信息，已忽略");
                 continue;
             }
 
-            sumFenceDualValues += load * dualsOfRLMP.get(fence.getConstName());
+            sumFenceDual += load * dualsOfRLMP.getOrDefault(fence.getConstName(), 0.0);
         }
 
-        // 4. 获取车辆约束的对偶变量σ
-        double sigma = order.getCarrier().getCarrierValue();
+        // 3. 载具使用次数的对偶值影响：使用次数 × 资源对偶值
+        double carrierResourceDual = 1.0 * dualsOfRLMP.getOrDefault(carrier.getConstName(), 0.0);
 
-        // 5. 计算RC
-        double dualObj = price - (sumFenceDualValues + sigma * order.getDispatchNum()) - order.getCarrierCost();
-
-        return dualObj;
+        // 5. 计算RC：原始收益 - 所有约束的边际成本总和
+        return price - (sumFenceDual + carrierResourceDual);
     }
 
     public static double calculatePrimalObj(Order order){
@@ -56,19 +61,7 @@ public class PriceCalculator {
         for (Map.Entry<Integer, Double> entry : order.getLoads().entrySet()) {
             int fenceId = entry.getKey();       // 围栏编号
             double load = entry.getValue();     // 该围栏的装载量
-
-            // 校验装载量有效性（忽略负数装载量，避免异常值影响）
-            if (load < 0) {
-                System.out.println("警告：围栏" + fenceId + "的装载量为负数（" + load + "），已忽略");
-                continue;
-            }
-
-            // 获取围栏对象，检查是否存在
             Fence fence = order.getFences().getFence(fenceId);
-            if (fence == null) {
-                System.out.println("警告：未找到围栏编号" + fenceId + "的信息，已忽略");
-                continue;
-            }
 
             // 累加当前围栏的价值（装载量 × 单位价值）
             totalValue += load * fence.getFenceValue();

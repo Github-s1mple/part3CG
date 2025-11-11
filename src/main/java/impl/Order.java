@@ -23,6 +23,11 @@ public class Order {
     private double reducedCost;
     private double carrierCost;
 
+    public Order(){
+        loads = new HashMap<>();
+        fenceList = new ArrayList<>();
+    }
+
     public Order(Route route, HashMap<Integer, Double> loads, Carrier carrier, Integer orderId) {
         this.fences = route.getFences();
         this.orderId = orderId;
@@ -34,6 +39,14 @@ public class Order {
         this.depot = route.getDepot();
         this.price = 0;
         calculateCarrierPrice();
+    }
+
+    public void addLoad(Integer index, Double load){
+        loads.put(index, load);
+    }
+
+    public void addFence(Integer index){
+        fenceList.add(index);
     }
 
     public void calculateCarrierPrice(){

@@ -140,7 +140,36 @@ public class RLMPSolve {
             // 添加约束（右边界=承运人最大资源）
             finalModel.addConstr(expr, GRB.LESS_EQUAL, carrier.getMaxUseTimes(), constName);
         }
-        System.out.println("最终模型添加 " + instance.getCarrierList().size() + " 个承运人约束");
+        System.out.println("最终模型添加 " + instance.getCarrierList().size() + " 个载具约束");
+
+        // 4. 添加承运人距离约束（sum(x_i * 订单i的距离) ≤ 承运人最大允许距离）
+        for (Carrier carrier : instance.getCarrierList()) {
+            // 约束名称需唯一，避免与现有约束冲突（如在原名称后加"_distance"）
+            String distanceConstName = carrier.getConstName() + "_distance";
+            GRBLinExpr distanceExpr = new GRBLinExpr();
+
+            for (Map.Entry<String, GRBVar> entry : orderVarMap.entrySet()) {
+                GRBVar var = entry.getValue();
+                Order order = findOrderById(entry.getKey());
+                if (order == null) continue;
+
+                // 仅统计当前承运人绑定的订单的距离
+                if (order.getCarrier() != null && order.getCarrier().getIndex().equals(carrier.getIndex())) {
+                    // 系数 = 订单的总行驶距离（totalDistance）
+                    double orderDistance = order.getDistance();
+                    distanceExpr.addTerm(orderDistance, var);
+                }
+            }
+
+            // 添加约束：总距离 ≤ 承运人最大允许距离
+            finalModel.addConstr(
+                    distanceExpr,
+                    GRB.LESS_EQUAL,
+                    carrier.getMaxDistance(),  // 右边界：载具最大允许距离
+                    distanceConstName
+            );
+        }
+        System.out.println("最终模型添加 " + instance.getCarrierList().size() + " 个载具距离约束");
 
         // 更新模型使变量和约束生效
         finalModel.update();
@@ -209,7 +238,7 @@ public class RLMPSolve {
     }
 
     /**
-     * 验证约束满足情况（可选，用于结果校验）
+     * 验证约束满足情况
      */
     private void verifyConstraints() throws GRBException {
         System.out.println("\n===== 约束满足情况验证 =====");
@@ -233,6 +262,18 @@ public class RLMPSolve {
             double maxResource = carrier.getMaxUseTimes();
             double usedResource = maxResource - slack;
             System.out.println("承运人[" + constName + "]：实际占用=" + String.format("%.2f", usedResource) + "，最大资源=" + maxResource + "，剩余资源=" + String.format("%.2f", slack));
+        }
+
+        // 验证承运人距离约束（添加到verifyConstraints()方法中）
+        for (Carrier carrier : instance.getCarrierList()) {
+            String distanceConstName = carrier.getConstName() + "_distance";
+            GRBConstr distanceConstr = finalModel.getConstrByName(distanceConstName);
+            if (distanceConstr == null) continue;
+
+            double slack = distanceConstr.get(GRB.DoubleAttr.Slack); // 松弛量=最大距离-实际距离
+            double maxDistance = carrier.getMaxDistance();
+            double usedDistance = maxDistance - slack;
+            System.out.println("承运人[" + carrier.getConstName() + "]距离：实际使用=" + String.format("%.2f", usedDistance) + "，最大允许=" + maxDistance + "，剩余=" + String.format("%.2f", slack));
         }
     }
 

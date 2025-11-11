@@ -1,5 +1,6 @@
 package impl;
 
+import baseinfo.Constants;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -11,7 +12,6 @@ public class Carrier {
     private Double maxDistance;
     private Integer depot;
     private Double minRatioCapacity;
-    private double carrierValue;
     private String constName;
     private Integer maxUseTimes;
 
@@ -21,8 +21,7 @@ public class Carrier {
         this.maxDistance = maxDistance;
         this.depot = depot;
         this.minRatioCapacity = minRatioCapacity;
-        this.carrierValue = 0.0;
         this.constName = "C" + index;
-        this.maxUseTimes = 1;
+        this.maxUseTimes = Constants.CARRYMAXUSETIMES;
     }
 }

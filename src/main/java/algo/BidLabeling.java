@@ -165,17 +165,6 @@ public class BidLabeling {
             fence.setFenceValue(fence.getOriginalFenceValue() - dualsOfRLMP.get(fence.getConstName()) * dual_multiplier);
         }
 
-        // update depotValue
-        for (Integer depotIndex : depots.getDepotIndexList()) {
-            Depot depot = depots.getDepot(depotIndex);
-            depot.setDepotValue(depot.getOriginalDepotValue() - dualsOfRLMP.get(depot.getConstName()) * dual_multiplier);
-        }
-
-        // update carrierValue
-        for (Carrier carrier : carrierList) {
-            carrier.setCarrierValue(dualsOfRLMP.get(carrier.getConstName()));
-        }
-
         for (Order order : this.orderPool) {
             order.setReducedCost(PriceCalculator.calculateRC(order, dualsOfRLMP));
         }

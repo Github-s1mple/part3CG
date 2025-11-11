@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Objects;
 
@@ -40,5 +41,15 @@ public class Depots {
                 depotNum += 1;
             }
         }
+    }
+
+    public List<HashMap<Integer, Double>> generateDepotDistanceMatrix() {
+        List<HashMap<Integer, Double>> depotDistanceMatrix = new ArrayList<>();
+        if (depotList != null) {
+            for (Depot depot : depotList) {
+                depotDistanceMatrix.add(depot.getDepotMap());
+            }
+        }
+        return depotDistanceMatrix;
     }
 }

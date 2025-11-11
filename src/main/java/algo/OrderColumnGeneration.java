@@ -1,6 +1,7 @@
 package algo;
 
 import Utils.CommonUtils;
+import Utils.GurobiUtils;
 import impl.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -72,11 +73,12 @@ public class OrderColumnGeneration {
 
 
     /**
-     * 初始化空约束框架（围栏容量约束+承运人资源约束）
-     * 列生成经典做法：先建约束结构，后续添加变量时仅更新系数
+     * 初始化空约束框架（仅保留2类约束）
+     * 1. 围栏容量约束：sum(x_r * load_{r,f}) ≤ 围栏f的最大容量
+     * 2. 承运人名额约束：sum(x_r * 1) ≤ 1（每个载具最终仅选1条路径）
      */
     private void initializeEmptyConstraints() throws GRBException {
-        // 1. 围栏容量约束：sum(x_r * load_{r,f}) ≤ 围栏f的最大容量
+        // 1. 围栏容量约束（保留不变）
         for (Fence fence : fences.getFenceList()) {
             String constName = fence.getConstName();
             GRBLinExpr emptyExpr = new GRBLinExpr(); // 空表达式（无变量）
@@ -89,7 +91,7 @@ public class OrderColumnGeneration {
             }
         }
 
-        // 2. 承运人资源约束：sum(x_r * 1) ≤ 承运人k的最大使用次数（每条路径用1次资源）
+        // 2. 承运人名额约束（保留不变，已设置maxUseTimes=1）
         for (Carrier carrier : instance.getCarrierList()) {
             String constName = carrier.getConstName();
             GRBLinExpr emptyExpr = new GRBLinExpr(); // 空表达式（无变量）
@@ -98,27 +100,24 @@ public class OrderColumnGeneration {
             );
             constraintsMap.put(constName, constr);
             if (outputFlag) {
-                System.out.println("初始化空约束：承运人资源约束-" + constName + "，最大使用次数=" + carrier.getMaxUseTimes());
+                System.out.println("初始化空约束：承运人名额约束-" + constName + "，最大使用次数=" + carrier.getMaxUseTimes());
             }
         }
     }
 
 
     /**
-     * 初始化对偶值（围栏+承运人，初始为0）
+     * 初始化对偶值（围栏+承运人资源+承运人距离，初始为0）
      */
     private void initDualValues() {
-        // 围栏约束对偶值
+        // 1. 围栏约束对偶值（保留不变）
         for (Fence fence : fences.getFenceList()) {
             this.dualsOfRLMP.put(fence.getConstName(), 0.0);
         }
-        // 承运人约束对偶值
+
+        // 2. 承运人名额约束对偶值（保留不变）
         for (Carrier carrier : instance.getCarrierList()) {
             this.dualsOfRLMP.put(carrier.getConstName(), 0.0);
-        }
-        // 仓库约束(TODO未添加)
-        for (Depot depot : depots.getDepotList()) {
-            this.dualsOfRLMP.put(depot.getConstName(), 0.0);
         }
     }
 
@@ -226,7 +225,7 @@ public class OrderColumnGeneration {
         for (Order order : newOrders) {
             String orderId = String.valueOf(order.getOrderId());
 
-            // 1. 跳过已存在的路径
+            // 1. 跳过已存在的路径（原有代码不变）
             if (RLMPVariables.containsKey(orderId)) {
                 if (outputFlag) {
                     System.out.println("路径" + orderId + "已存在，跳过");
@@ -234,7 +233,7 @@ public class OrderColumnGeneration {
                 continue;
             }
 
-            // 2. 创建路径变量（x_r：0-1变量，LP松弛用连续型）
+            // 2. 创建路径变量（原有代码不变）
             double pathProfit = order.getPrice(); // 目标函数系数=路径收益（最大化）
             GRBVar pathVar = RLMPSolver.addVar(
                     0.0,                // 下界：不选该路径
@@ -249,26 +248,28 @@ public class OrderColumnGeneration {
             orderIdMap.put(orderId, order);
             addedCount++;
 
-            // 4. 更新围栏约束系数（添加当前路径的负载）
+            // 4. 更新围栏约束系数（保留不变）
             updateFenceConstraintCoeff(order, pathVar);
 
-            // 5. 更新承运人约束系数（当前路径消耗1次资源）
+            // 5. 更新承运人名额约束系数（保留不变）
             updateCarrierConstraintCoeff(order, pathVar);
 
             if (outputFlag) {
-                System.out.printf("添加新路径：ID=%s，收益=%.2f，负载围栏数=%d，承运人=%s%n",
+                System.out.printf("添加新路径：ID=%s，收益=%.2f，负载围栏数=%d，承运人=%s，距离=%.2f%n",
                         orderId, pathProfit, order.getLoads().size(),
-                        (order.getCarrier() != null ? order.getCarrier().getIndex() : "无"));
+                        (order.getCarrier() != null ? order.getCarrier().getIndex() : "无"),
+                        order.getDistance());
             }
         }
 
-        // 6. 批量更新模型（生效所有变量和系数变更）
+        // 7. 批量更新模型（生效所有变量和系数变更）
         RLMPSolver.update();
         System.out.printf("本次添加新路径：%d个，当前总路径数：%d%n", addedCount, RLMPVariables.size());
     }
 
+
     /**
-     * 更新围栏约束系数（适配Gurobi 12语法）
+     * 更新围栏约束系数
      */
     private void updateFenceConstraintCoeff(Order order, GRBVar orderVar) throws GRBException {
         String orderId = String.valueOf(order.getOrderId());
@@ -300,8 +301,8 @@ public class OrderColumnGeneration {
                 constraintsMap.put(constName, constr);
             }
 
-            // 【Gurobi 12语法】通过模型设置约束中变量的系数
-            RLMPSolver.chgCoeff(constr, orderVar, load);  // 核心修改：用模型对象调用chgCoeff
+            // 通过模型设置约束中变量的系数
+            RLMPSolver.chgCoeff(constr, orderVar, load);
 
             if (outputFlag) {
                 System.out.printf("路径%s：围栏%d 负载=%.2f，已添加到约束%s%n",
@@ -312,7 +313,7 @@ public class OrderColumnGeneration {
 
 
     /**
-     * 更新承运人约束系数（适配Gurobi 12语法）
+     * 更新承运人约束系数
      */
     private void updateCarrierConstraintCoeff(Order order, GRBVar orderVar) throws GRBException {
         String orderId = String.valueOf(order.getOrderId());
@@ -333,7 +334,7 @@ public class OrderColumnGeneration {
             constraintsMap.put(constName, constr);
         }
 
-        // 【Gurobi 12语法】通过模型设置约束中变量的系数
+        // 通过模型设置约束中变量的系数
         RLMPSolver.chgCoeff(constr, orderVar, 1.0);  // 核心修改：用模型对象调用chgCoeff
 
         if (outputFlag) {
@@ -354,7 +355,7 @@ public class OrderColumnGeneration {
             // 求解主问题
             RLMPSolver.optimize();
             int status = RLMPSolver.get(GRB.IntAttr.Status);
-            String statusDesc = getStatusDescription(status);
+            String statusDesc = GurobiUtils.getStatusDescription(status);
             if (outputFlag) {
                 System.out.println("迭代" + iterationCnt + "：主问题状态=" + statusDesc);
             }
@@ -407,23 +408,5 @@ public class OrderColumnGeneration {
             System.out.printf("迭代%d：对偶值提取完成（成功%d，失败%d）%n",
                     iterationCnt, successCnt, failCnt);
         }
-    }
-
-    private String getStatusDescription(int status) {
-        return switch (status) {
-            case GRB.Status.OPTIMAL -> "最优解（已找到全局最优解）";
-            case GRB.Status.SUBOPTIMAL -> "次优解（未找到全局最优解，仅得到可行解，可能因时间限制、精度设置等）";
-            case GRB.Status.INFEASIBLE -> "无可行解（模型约束相互冲突，不存在满足所有约束的解）";
-            case GRB.Status.UNBOUNDED -> "无界解（目标函数可无限增大/减小，无最优值）";
-            case GRB.Status.TIME_LIMIT -> "时间限制终止（求解时间达到设置的TimeLimit，未完成全部求解）";
-            case GRB.Status.INTERRUPTED -> "被中断（求解过程被外部中断，如手动停止）";
-            case GRB.Status.LOADED -> "模型已加载（模型已成功读取，但尚未开始求解）";
-            case GRB.Status.INPROGRESS -> "正在进行中";
-            case GRB.Status.CUTOFF -> "截断（当前解已超过截断值，无更优解可寻）";
-            case GRB.Status.ITERATION_LIMIT -> "迭代次数限制终止（求解迭代次数达到设置的IterationLimit）";
-            case GRB.Status.NODE_LIMIT -> "节点数限制终止（分支定界节点数达到设置的NodeLimit）";
-            case GRB.Status.SOLUTION_LIMIT -> "解数量限制终止（找到的可行解数量达到设置的SolutionLimit）";
-            default -> "未知状态（状态码：" + status + "，请参考Gurobi官方文档）";
-        };
     }
 }

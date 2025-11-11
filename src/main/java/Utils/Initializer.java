@@ -66,7 +66,8 @@ public class Initializer {
                             selfDemand,
                             depotDemand,
                             deliverDemand,
-                            0.0
+                            0.0,
+                            false
                     );
 
                     fence.generateDistanceMap(distanceMatrix);

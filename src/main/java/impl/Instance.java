@@ -7,6 +7,7 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 @Setter
@@ -19,12 +20,12 @@ public class Instance {
     private MapDistance fenceMapDistance;
     private ArrayList<Carrier> carrierList;
     private List<List<Double>> distanceMatrix;
-    private List<double[]> depotMap;
+    private List<HashMap<Integer, Double>> depotDistanceMatrix;
     private Initializer initializer;
 
     public Instance() {
         distanceMatrix = MapDistance.initialDistanceMatrix();
-        depotMap = MapDistance.initialDepotMap();
+        List<double []> depotMap = MapDistance.initialDepotMap();
         fences = new Fences();
         depots = new Depots();
         carriers = new Carriers();
@@ -33,6 +34,7 @@ public class Instance {
         fences.setFenceList(initializer.fenceInitializer(distanceMatrix));
         fences.generateFenceIndexList();
         depots.generateDepotIndexList();
+        depotDistanceMatrix = depots.generateDepotDistanceMatrix();
         carrierList = initializer.carrierInitializer(Constants.ISDIFFERENTCARRIER);
         carriers.setCarrierList(carrierList);
         orderList = null;
