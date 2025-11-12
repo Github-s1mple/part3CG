@@ -3,7 +3,7 @@ package baseinfo;
 public class Constants {
     public static final Integer MAXVISITNUMBER = 10;
     public static final Double MAXDISTANCE = 5.0;
-    public static final Double DELIVERCOSTPERMETER = 0.00000005;
+    public static final Double DELIVERCOSTPERMETER = 0.00005;
     public static final Double DUALMULTIPLIER = 1.0; //对偶值调参
     public static final Integer OUTPUTINTERVAL = 100;
     public static final Double MAXCAPACITY = 20.0;
