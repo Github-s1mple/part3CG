@@ -16,7 +16,7 @@ public class Constants {
     public static final double DEPOTDISTANCETOFENCEVALUE = 0.1;
     public static final Integer CARRYMAXUSETIMES = 1;
     // 算法模式
-    public static final String ALGOMODE = "C"; //"CG"是使用完整数据进行测试
+    public static String ALGOMODE = "C"; //"CG"是使用完整数据进行测试
     // 完整数据的文件路径
     public static final String allPointsFilePath = "all_points.xlsx";
     public static final String candidatePointsFilePath = "candidate_points.xlsx";
