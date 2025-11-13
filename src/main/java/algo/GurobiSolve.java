@@ -24,7 +24,7 @@ public class GurobiSolve {
     private double totalTimeSec;
     // 核心数据集合
     private Set<Integer> N;  // 围栏集合（点ID），例如 {1,2,...,F}（F为围栏数量）
-    private Set<Integer> M;  // 仓库集合（点ID），例如 {0, F+1}（虚拟点）
+    private Set<Integer> M;  // 仓库集合（点ID），例如 {-1, -F}（虚拟点）
     private Set<Integer> K;  // 载具集合（载具ID），例如 {1,2,...,V}（V为载具数量）
     private Set<Integer> V;  // 所有点的集合（V = M ∪ N）
     // Gurobi核心对象
@@ -39,7 +39,6 @@ public class GurobiSolve {
     private int numDepots;           // 仓库数量
     private int numFences;           // 围栏数量
     private int numCarriers;         // 载具数量
-    private int totalNodes;          // 总节点数（仓库 + 围栏）
     private List<Order> orderList;   // 最终结果
     // 格式化输出数值（保留2位小数）
     private final DecimalFormat df = new DecimalFormat("0.00");
@@ -56,7 +55,6 @@ public class GurobiSolve {
         this.numDepots = depots.getDepotList().size();
         this.numFences = fences.getFenceList().size();
         this.numCarriers = carrierList.size();
-        this.totalNodes = numDepots + numFences;
         this.orderList = new ArrayList<>();
 
         // 围栏集合N：点ID从1开始（避免与仓库ID冲突）
@@ -68,7 +66,7 @@ public class GurobiSolve {
         // 仓库集合M：点ID从0开始（虚拟点）
         M = new HashSet<>();
         for (int i = 0; i < numDepots; i++) {
-            M.add(-i - 1);  // 仓库ID：0,-1,...（用负数区分围栏）
+            M.add(-i - 1);  // 仓库ID：-1,...（用负数区分围栏）
         }
 
         // 载具集合K：载具ID从1开始
@@ -90,7 +88,7 @@ public class GurobiSolve {
             fakeFences.add(fakefence);
         }
 
-        // 初始化载具-仓库映射（假设Carrier有getDepotId()方法）
+        // 初始化载具-仓库映射
         carrierToDepotMap = new HashMap<>();
         for (int k : K) {
             Carrier carrier = carrierList.get(k - 1); // 载具ID从1开始
@@ -98,7 +96,7 @@ public class GurobiSolve {
             carrierToDepotMap.put(k, depotId);
         }
 
-        // 初始化Gurobi环境和模型（遵循示例语法）
+        // 初始化Gurobi环境和模型
         this.env = new GRBEnv();
         this.model = new GRBModel(env);
 
@@ -115,7 +113,7 @@ public class GurobiSolve {
      * 定义所有决策变量
      */
     public void defineVariables() throws GRBException {
-        // 1. Xik：载具k是否访问点i（二进制变量）
+        // 1. Xik：载具k是否访问点i（0-1变量）
         // 点i ∈ N，载具k ∈ K
         for (int i : N) {
             for (int k : K) {
@@ -131,14 +129,13 @@ public class GurobiSolve {
             }
         }
 
-        // 2. Zijk：载具k访问i后访问j（二进制变量）
+        // 2. Zijk：载具k访问i后访问j（0-1变量）
         // 点i,j ∈ V，i ≠ j；载具k ∈ K
         for (int i : V) {
             for (int j : V) {
                 if (i == j) continue;  // 排除自环
                 for (int k : K) {
                     String varName = String.format("Z_%d_%d_%d", i, j, k);
-                    // 取值范围：0-1（不行驶-行驶）
                     GRBVar var = model.addVar(
                             0.0, 1.0,
                             0.0,  // 目标系数后续在运输成本中设置
@@ -171,13 +168,13 @@ public class GurobiSolve {
         }
 
         // 4. Uik：MTZ约束中的整数变量（用于消除子回路）
-        // 点i ∈ V，载具k ∈ K；取值范围通常为[2, |V|]（避免与起点冲突）
-        for (int i : V) {
+        // 点i ∈ N，载具k ∈ K；取值范围通常为[2, |V|]（避免与起点冲突）
+        for (int i : N) {
             for (int k : K) {
                 String varName = String.format("U_%d_%d", i, k);
                 // 取值范围：1到总点数（足够大的整数即可）
                 GRBVar var = model.addVar(
-                        1.0, V.size(),
+                        1.0, N.size(),
                         0.0,  // 无直接目标系数
                         GRB.INTEGER,
                         varName
@@ -211,7 +208,7 @@ public class GurobiSolve {
         }
 
         // 2. 总运输成本：∑(k∈K) ∑(i∈V) ∑(j∈V) (Zijk × 路径i→j距离 × 单位距离成本) → 减成本，系数为负
-        double unitTransCost = Constants.DELIVERCOSTPERMETER; // 单位距离运输成本（元/米）
+        double unitTransCost = Constants.DELIVER_COST_PER_METER; // 单位距离运输成本（元/米）
         List<HashMap<Integer, Double>> depotToFenceDist = instance.getDepotDistanceMatrix(); // 仓库-围栏距离
         List<List<Double>> fenceToFenceDist = instance.getDistanceMatrix(); // 围栏-围栏距离
 
@@ -291,12 +288,15 @@ public class GurobiSolve {
         // 8. MTZ子回路消除约束
         addMTZConstraints();
 
-        // 9. 仓库强约束
+        // 9. 仓库不相连强约束
         addForbidDepotToDepotConstraints();
 
         // 10. 围栏单车单次约束
         addOneCarrierOnceConstraints();
+
+        // 11. 单载具单仓库强约束
         addDepotOneCarrierConstraints();
+
         model.update();
         System.out.printf("约束添加完成：共%d条约束%n", constrMap.size());
     }
@@ -355,10 +355,11 @@ public class GurobiSolve {
         }
     }
 
+
     /**
      * 3. 路径连续性约束（流量守恒）
      * 逻辑：对于围栏点i，载具k进入的路径数 = 离开的路径数
-     * 数学表达：∀i∈N，∀k∈K，∑(j∈V\i) Zijkr = ∑(j∈V\i) Zjik
+     * 数学表达：∀i∈N，∀k∈K，∑(j∈V\i) Zijk = ∑(j∈V\i) Zjik
      */
     private void addFlowConservationConstraints() throws GRBException {
         for (int i : N) {  // 遍历围栏（仓库无需流量守恒）
@@ -600,8 +601,7 @@ public class GurobiSolve {
             GRBLinExpr expr = new GRBLinExpr();
             String constrName = String.format("depotOneCarrier_i%d", i);
 
-            // 只允许从所属仓库出发，且目标只能是围栏（排除其他仓库）
-            for (int j : N) { // j必须是围栏（N），不能是仓库（M）
+            for (int j : N) {
                 for (int k : K) {
                     String zName = String.format("Z_%d_%d_%d", i, j, k);
                     GRBVar zVar = varMap.get(zName);
@@ -614,6 +614,7 @@ public class GurobiSolve {
             constrMap.put(constrName, constr);
         }
     }
+
 
     /**
      * 求解模型并输出完整结果（包含冲突分析）
@@ -628,49 +629,48 @@ public class GurobiSolve {
 
             // 输出求解状态
             int status = model.get(GRB.IntAttr.Status);
-            System.out.println("========================================");
+            System.out.println("求解成功！");
             System.out.println("求解状态：" + GurobiUtils.getStatusDescription(status));
 
             // 无可行解时，调用冲突约束分析
             if (status == GRB.Status.INFEASIBLE) {
-                gurobiUtils.printConflictConstraints(); // 调用修正后的冲突分析方法
+                gurobiUtils.printConflictConstraints();
                 System.out.println("未找到可行解，已输出冲突约束分析");
-                System.out.println("========================================");
                 return null;
             }
 
             // 非可行/最优状态，终止输出
             if (status != GRB.Status.OPTIMAL && status != GRB.Status.SUBOPTIMAL) {
                 System.out.println("未找到可行解或最优解，终止输出");
-                System.out.println("========================================");
                 return null;
             }
 
             // 正常求解后的输出逻辑
             double totalProfit = model.get(GRB.DoubleAttr.ObjVal);
-            System.out.println("========================================");
             System.out.println("【全局最优结果】");
             System.out.println("最优净收益：" + df.format(totalProfit));
-            System.out.println("========================================");
 
-            outputAllDecisionVariables();
-            outputVehicleBusinessDetails();
+            if(outputFlag){
+                outputAllDecisionVariables();
+                outputVehicleBusinessDetails();
+            }else{
+                produceVehicleBusinessDetails();
+            }
 
             return orderList;
         } finally {
             // 记录求解结束时间（毫秒），计算总耗时（转换为秒，保留2位小数）
             long endTime = System.currentTimeMillis();
             totalTimeSec = (endTime - startTime) / 1000.0;
-            System.out.println("========================================");
             System.out.printf("【求解耗时统计】%n");
             System.out.printf("完整求解过程总耗时：%s 秒%n", df.format(totalTimeSec));
-            System.out.println("========================================");
 
             // 释放模型和环境资源
             model.dispose();
             env.dispose();
         }
     }
+
 
     /**
      * 输出所有决策变量的取值
@@ -757,6 +757,56 @@ public class GurobiSolve {
     /**
      * 输出载具业务详情（路径、装载量、收益等结构化信息）
      */
+    private void produceVehicleBusinessDetails() throws GRBException {
+        List<Fence> fenceList = fences.getFenceList();
+
+        for (int k : K) { // 按载具ID遍历
+            Order order = new Order();
+            Carrier carrier = carrierList.get(k - 1); // 载具ID从1开始，列表索引从0开始
+            order.setFences(fences);
+            order.setOrderId(k);
+            order.setCarrier(carrier);
+            order.setDepot(carrier.getDepot());
+
+            double totalDistance = calculateVehicleTotalDistance(k);
+            double transportCost = totalDistance * Constants.DELIVER_COST_PER_METER;
+            order.setCarrierCost(transportCost);
+            order.setDistance(totalDistance);
+
+
+            double totalLoad = 0;
+            double totalLoadProfit = 0;
+
+            int fenceCount = 0;
+            for (int i : N) {
+                Fence fence = fenceList.get(i - 1);
+                String dVarName = String.format("d_%d_%d", i, k);
+                GRBVar dVar = varMap.get(dVarName);
+                if (dVar != null) {
+                    double load = dVar.get(GRB.DoubleAttr.X);
+                    if (load > 1e-6) {
+                        fenceCount += 1;
+                        double profit = load * fence.getOriginalFenceValue();
+                        totalLoad += load;
+                        totalLoadProfit += profit;
+                        order.addLoad(i, load);
+                    }
+                }
+            }
+            order.setFenceNumber(fenceCount);
+            order.setDispatchNum(totalLoad);
+
+            double vehicleNetProfit = totalLoadProfit - transportCost;
+            order.setPrice(vehicleNetProfit);
+            List<String> path = getVehiclePathInOrder(k, order);
+            this.orderList.add(order);
+        }
+    }
+
+
+    /**
+     * 输出载具业务详情（路径、装载量、收益等结构化信息）
+     */
     private void outputVehicleBusinessDetails() throws GRBException {
         List<Fence> fenceList = fences.getFenceList();
         System.out.println("\n【载具业务详情】");
@@ -778,7 +828,7 @@ public class GurobiSolve {
 
             // ① 载具k的总行驶距离（需计算：所有选中路径的距离之和）
             double totalDistance = calculateVehicleTotalDistance(k);
-            double transportCost = totalDistance * Constants.DELIVERCOSTPERMETER;
+            double transportCost = totalDistance * Constants.DELIVER_COST_PER_METER;
             System.out.printf("行驶距离：%s米，运输成本：%s%n",
                     df.format(totalDistance), df.format(transportCost));
             order.setCarrierCost(transportCost);
@@ -835,13 +885,9 @@ public class GurobiSolve {
      */
     private double calculateVehicleTotalDistance(int k) throws GRBException {
         double totalDist = 0;
-        // depotMap：实际类型是 List<double[]>，存储仓库到围栏的距离
-        // 其中 depotMap.get(depotIdx) 是 double[]，表示仓库depotIdx到所有围栏的距离（单位：千米）
         List<HashMap<Integer, Double>> depotToFenceDist = instance.getDepotDistanceMatrix();
-        // fenceDistMatrix：围栏到围栏的距离矩阵（假设是 List<double[]> 或 List<List<Double>>）
         List<List<Double>> fenceToFenceDist = instance.getDistanceMatrix();
 
-        // 安全检查
         if (depotToFenceDist == null || depotToFenceDist.isEmpty()) {
             System.err.println("警告：depotToFenceDist为空，仓库到围栏的距离按0处理");
             return 0;
@@ -856,15 +902,15 @@ public class GurobiSolve {
                 String zVarName = String.format("Z_%d_%d_%d", i, j, k);
                 GRBVar zVar = varMap.get(zVarName);
                 if (zVar == null || zVar.get(GRB.DoubleAttr.X) <= 0.5) {
-                    continue; // 跳过未选中的路径
+                    continue;
                 }
 
                 double dist = 0; // 距离（米）
                 try {
                     if (M.contains(i) && N.contains(j)) {
-                        // 1. 仓库i → 围栏j：使用depotToFenceDist（List<double[]>）
-                        int depotIdx = -i - 1; // 仓库ID（负数）转索引（0-based）
-                        int fenceIdx = j - 1;  // 围栏ID（1-based）转索引（0-based）
+                        // 1. 仓库i → 围栏j：
+                        int depotIdx = -i - 1;
+                        int fenceIdx = j - 1;
 
                         // 校验仓库索引
                         if (depotIdx < 0 || depotIdx >= numDepots) {
@@ -874,7 +920,7 @@ public class GurobiSolve {
                         if (depotIdx >= depotToFenceDist.size()) {
                             throw new IndexOutOfBoundsException("仓库" + depotIdx + "在depotToFenceDist中无数据");
                         }
-                        HashMap<Integer, Double> distArray = depotToFenceDist.get(depotIdx); // 仓库depotIdx到所有围栏的距离数组
+                        HashMap<Integer, Double> distArray = depotToFenceDist.get(depotIdx);
 
                         // 校验围栏索引
                         if (fenceIdx < 0 || fenceIdx >= numFences) {
@@ -889,9 +935,9 @@ public class GurobiSolve {
                         dist = distArray.get(fenceIdx) * 1000;
 
                     } else if (N.contains(i) && M.contains(j)) {
-                        // 2. 围栏i → 仓库j：复用仓库j到围栏i的距离（往返距离相同）
-                        int fenceIdx = i - 1;  // 围栏i的索引
-                        int depotIdx = -j - 1; // 仓库j的索引
+                        // 2. 围栏i → 仓库j：
+                        int fenceIdx = i - 1;
+                        int depotIdx = -j - 1;
 
                         // 校验仓库索引
                         if (depotIdx < 0 || depotIdx >= numDepots) {
@@ -900,7 +946,7 @@ public class GurobiSolve {
                         if (depotIdx >= depotToFenceDist.size()) {
                             throw new IndexOutOfBoundsException("仓库" + depotIdx + "在depotToFenceDist中无数据");
                         }
-                        HashMap<Integer, Double> distArray = depotToFenceDist.get(depotIdx); // 仓库depotIdx到所有围栏的距离数组
+                        HashMap<Integer, Double> distArray = depotToFenceDist.get(depotIdx);
 
                         // 校验围栏索引
                         if (fenceIdx < 0 || fenceIdx >= numFences || fenceIdx >= distArray.size()) {
@@ -911,7 +957,7 @@ public class GurobiSolve {
                         dist = distArray.get(fenceIdx) * 1000;
 
                     } else if (N.contains(i) && N.contains(j)) {
-                        // 3. 围栏i → 围栏j：使用fenceToFenceDist（假设是List<List<Double>>）
+                        // 3. 围栏i → 围栏j：
                         int fenceI = i - 1;
                         int fenceJ = j - 1;
 
@@ -944,7 +990,7 @@ public class GurobiSolve {
      */
     private List<String> getVehiclePathInOrder(int k, Order order) throws GRBException {
         List<String> path = new ArrayList<>();
-        Map<Integer, Integer> nextNodeMap = new HashMap<>(); // key=当前节点，value=下一个节点
+        Map<Integer, Integer> nextNodeMap = new HashMap<>(); // key = 当前节点，value = 下一个节点
         Set<Integer> visitedNodes = new HashSet<>();
 
         // 第一步：构建路径映射（当前节点→下一个节点）
@@ -975,7 +1021,6 @@ public class GurobiSolve {
         // 第三步：按映射遍历路径
         if (currentNode != null) {
             while (currentNode != null) {
-                // 转换节点名为“仓库X”或“围栏X”
                 String nodeName;
                 if(M.contains(currentNode)){
                     nodeName = "仓库" + (-currentNode - 1);

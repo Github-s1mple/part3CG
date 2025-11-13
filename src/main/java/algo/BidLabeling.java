@@ -60,7 +60,7 @@ public class BidLabeling {
         this.carriers = instance.getCarriers();
         this.depots = instance.getDepots(); // 从实例中获取多仓库管理类
         this.carrierList = instance.getCarrierList();
-        this.dual_multiplier = Constants.DUALMULTIPLIER;
+        this.dual_multiplier = Constants.DUAL_MULTIPLIER;
         this.loadingAlgorithm = new LoadingAlgorithm(this);
 
         // 2. 初始化标签容器（关键：labelPool按节点数量初始化，避免索引越界）
@@ -90,6 +90,7 @@ public class BidLabeling {
                 double currentDist = fenceI.getDistance(j);
                 fenceI.setNearestDiffLabelDist(min(fenceI.getNearestDiffLabelDist(), currentDist));
             }
+            fenceI.addFakeDepot();
         }
 
         for (Integer i : depots.getDepotIndexList()) {
@@ -201,7 +202,7 @@ public class BidLabeling {
             }
             // 定期输出迭代信息
             iterationCnt += 1;
-            if (iterationCnt % Constants.OUTPUTINTERVAL == 0) {
+            if (iterationCnt % Constants.OUTPUT_INTERVAL == 0) {
                 displayIterationInformationIfNecessary(iterationCnt);
             }
         }
@@ -216,32 +217,35 @@ public class BidLabeling {
         }
 
         // 2. 为每个仓库创建前向初始标签（起点=当前仓库，后续必须返回此仓库）
+        // 前向标签初始化：添加当前仓库到禁忌表
         for (Integer depotIdx : allDepotIndexes) {
             BitSet forwardTabu = new BitSet(fences.size());
+            forwardTabu.set(depotIdx);
             Label forwardInit = Label.generate(
-                    true,                  // 前向标签（从起点仓库出发）
-                    depotIdx,              // 当前节点=仓库索引（来自Depots）
-                    null,                  // 无父标签
-                    forwardTabu,           // 禁忌表
-                    0.0,                   // 初始卸货量=0
-                    0.0,                   // 初始距离=0
-                    0,                     // 初始访问次数=0（未访问卸货点）
+                    true,
+                    depotIdx,
+                    null,
+                    forwardTabu,
+                    0.0,
+                    0.0,
+                    0,
                     depotIdx
             );
             forwardLabelQueue.add(forwardInit);
         }
 
-        // 3. 为每个仓库创建后向初始标签（反向从起点仓库出发，目标是与前向标签拼接成闭环）
+        // 后向标签初始化：添加当前仓库到禁忌表
         for (Integer depotIdx : allDepotIndexes) {
             BitSet backwardTabu = new BitSet(fences.size());
+            backwardTabu.set(depotIdx);
             Label backwardInit = Label.generate(
-                    false,                 // 后向标签（反向扩展，最终需回到起点仓库）
-                    depotIdx,              // 当前节点=仓库索引（来自Depots）
-                    null,                  // 无父标签
-                    backwardTabu,          // 禁忌表
-                    0.0,                   // 初始卸货量=0
-                    0.0,                   // 初始距离=0
-                    0,                     // 初始访问次数=0
+                    false,
+                    depotIdx,
+                    null,
+                    backwardTabu,
+                    0.0,
+                    0.0,
+                    0,
                     depotIdx
             );
             backwardLabelQueue.add(backwardInit);
@@ -265,7 +269,7 @@ public class BidLabeling {
                 continue;
             }
             // 如果是虚拟节点（目的是截断搜索），则判断是否能成单，并压入待匹配池
-            if (nextNode == 999 && label.getLoadedQuantity() >= Constants.MINCARRIERLOAD) {
+            if (nextNode == 999 && label.getLoadedQuantity() >= Constants.MIN_CARRIER_LOAD) {
                 if (isForward) {
                     for (Label labelI : this.backwardLabelPool) {
                         this.labelConnect(label, labelI);
@@ -282,19 +286,19 @@ public class BidLabeling {
 
                 // 访问次数约束（仅卸货点计数，归属仓库不计入）
                 int newVisitNum = label.getVisitNum() + 1;
-                if (newVisitNum > Constants.MAXVISITNUMBER) {
+                if (newVisitNum > Constants.MAX_VISIT_NUM) {
                     continue;
                 }
 
                 // 卸货量约束（仅卸货点累加，归属仓库不计入）
                 double newLoad = label.getLoadedQuantity() + nextFence.getDeliverDemand();
-                if (newLoad > Constants.MAXCAPACITY) {
+                if (newLoad > Constants.MAX_CAPACITY) {
                     continue;
                 }
 
                 // 距离约束（含归属仓库的距离计算）
                 double distance_ = currentFence.getDistance(nextNode) + label.getTravelDistance();
-                if (distance_ > Constants.MAXDISTANCE) {
+                if (distance_ > Constants.MAX_DISTANCE) {
                     continue;
                 }
 
@@ -380,18 +384,18 @@ public class BidLabeling {
         // 3. 距离检查
         double connectDist = forwardEnd.getDistance(backwardStart.getIndex());
         double totalDist = forwardLabel.getTravelDistance() + connectDist + backwardLabel.getTravelDistance();
-        if (totalDist > Constants.MAXDISTANCE) {
+        if (totalDist > Constants.MAX_DISTANCE) {
             return;
         }
 
         // 4. 卸货量和访问次数校验
         double totalLoaded = forwardLabel.getLoadedQuantity() + backwardLabel.getLoadedQuantity();
-        if (totalLoaded > Constants.MAXCAPACITY) {
+        if (totalLoaded > Constants.MAX_CAPACITY) {
             return;
         }
 
         int totalVisitNum = forwardLabel.getVisitNum() + backwardLabel.getVisitNum();
-        if (totalVisitNum > Constants.MAXVISITNUMBER) {
+        if (totalVisitNum > Constants.MAX_VISIT_NUM) {
             return;
         }
 

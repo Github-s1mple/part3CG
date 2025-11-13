@@ -49,11 +49,10 @@ public class Fence {
         for (int targetIndex = 0; targetIndex < distances.size(); targetIndex++) {
             Double distance = distances.get(targetIndex);
             distanceMap.put(targetIndex, distance);
-            if (distance <= Constants.MAXDISTANCE / 2){
+            if (distance <= Constants.MAX_DISTANCE / 2){
                 vaildArcFence.add(targetIndex);
             }
         }
-        vaildArcFence.add(999);
     }
 
     public Double getDistance(Integer endFence) {
@@ -64,4 +63,8 @@ public class Fence {
         return this.distanceMap.get(endFence.getIndex());
     }
 
+    public void addFakeDepot() {
+        vaildArcFence.add(999);
+        return;
+    }
 }

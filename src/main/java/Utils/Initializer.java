@@ -35,7 +35,7 @@ public class Initializer {
         System.out.println("开始初始化围栏...");
         fenceList = new ArrayList<>();
 
-        try (FileInputStream fis = new FileInputStream(Constants.ALGOMODE == "CG" ? Constants.allPointsFilePath: Constants.allPointsTestFilePath);
+        try (FileInputStream fis = new FileInputStream(Constants.ALGO_MODE == "CG" ? Constants.allPointsFilePath: Constants.allPointsTestFilePath);
              Workbook workbook = new XSSFWorkbook(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0); // 获取第一个工作表
@@ -72,7 +72,7 @@ public class Initializer {
 
                     fence.generateDistanceMap(distanceMatrix);
                     double nearestDepotDistance = calNearestDepotDistance(fence, depotList);
-                    fence.setOriginalFenceValue(nearestDepotDistance * Constants.DEPOTDISTANCETOFENCEVALUE);
+                    fence.setOriginalFenceValue(nearestDepotDistance * Constants.DISTANCE_TO_NEAREST_FENCE);
                     fenceList.add(fence);
 
                 } catch (Exception e) {
@@ -99,7 +99,7 @@ public class Initializer {
         }
 
         depotList = new ArrayList<>();
-        try (FileInputStream fis = new FileInputStream(Constants.ALGOMODE == "CG" ? Constants.candidatePointsFilePath : Constants.candidatePointsTestFilePath);
+        try (FileInputStream fis = new FileInputStream(Constants.ALGO_MODE == "CG" ? Constants.candidatePointsFilePath : Constants.candidatePointsTestFilePath);
              Workbook workbook = WorkbookFactory.create(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0);
@@ -143,10 +143,10 @@ public class Initializer {
 
                 try {
                     int currentIndex = index; // 当前行的序号
-                    Double capacity = Constants.MAXCAPACITY;
-                    Double price = Constants.DELIVERCOSTPERMETER;
-                    Double maxDistance = Constants.MAXDISTANCE;
-                    Double minRatioCapacity = Constants.MINCARRIERLOAD;
+                    Double capacity = Constants.MAX_CAPACITY;
+                    Double price = Constants.DELIVER_COST_PER_METER;
+                    Double maxDistance = Constants.MAX_DISTANCE;
+                    Double minRatioCapacity = Constants.MIN_CARRIER_LOAD;
 
                     Carrier carrier = new Carrier(
                             currentIndex,

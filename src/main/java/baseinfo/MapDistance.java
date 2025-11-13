@@ -63,7 +63,7 @@ public class MapDistance {
     public static List<List<Double>> initialDistanceMatrix() {
         System.out.println("开始生成距离矩阵...");
         // XLSX文件路径
-        String xlsxFilePath = (Objects.equals(Constants.ALGOMODE, "CG") ? Constants.allPointsFilePath : Constants.allPointsTestFilePath);
+        String xlsxFilePath = (Objects.equals(Constants.ALGO_MODE, "CG") ? Constants.allPointsFilePath : Constants.allPointsTestFilePath);
 
         // 存储所有点的经纬度（lon, lat）
         List<double[]> coordinates = new ArrayList<>();
@@ -109,7 +109,7 @@ public class MapDistance {
 
     public static List<double[]> initialDepotMap() {
         List<double[]> fenceCoordinates = new ArrayList<>();
-        try (FileInputStream fis = new FileInputStream(Objects.equals(Constants.ALGOMODE, "CG") ? Constants.allPointsFilePath:Constants.allPointsTestFilePath);
+        try (FileInputStream fis = new FileInputStream(Objects.equals(Constants.ALGO_MODE, "CG") ? Constants.allPointsFilePath:Constants.allPointsTestFilePath);
              Workbook workbook = WorkbookFactory.create(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0);

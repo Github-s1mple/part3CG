@@ -22,6 +22,6 @@ public class Carrier {
         this.depot = depot;
         this.minRatioCapacity = minRatioCapacity;
         this.constName = "C" + index;
-        this.maxUseTimes = Constants.CARRYMAXUSETIMES;
+        this.maxUseTimes = Constants.CARRY_MAX_USE_TIMES;
     }
 }

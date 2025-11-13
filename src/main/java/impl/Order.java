@@ -13,12 +13,12 @@ public class Order {
     private Fences fences;
     private Integer orderId;
     private double distance;
-    private int fenceNumber;
     private HashMap<Integer, Double> loads;
     private ArrayList<Integer> fenceList;
+    private Integer depot;
+    private int fenceNumber;
     private Carrier carrier;
     private double price;
-    private Integer depot;
     private double dispatchNum;
     private double reducedCost;
     private double carrierCost;
@@ -50,6 +50,6 @@ public class Order {
     }
 
     public void calculateCarrierPrice(){
-        carrierCost = distance * Constants.DELIVERCOSTPERMETER;
+        carrierCost = distance * Constants.DELIVER_COST_PER_METER;
     }
 }

@@ -70,7 +70,11 @@ public class RLMPSolve {
         finalModel.set(GRB.DoubleParam.OptimalityTol, 1e-6);
         finalModel.set(GRB.IntParam.Presolve, 2); // 启用强预处理
         finalModel.set(GRB.StringAttr.ModelName, "Final_RLMP");
+
+        // 设置目标函数为最大化
+        finalModel.set(GRB.IntAttr.ModelSense, GRB.MAXIMIZE);
     }
+
 
     /**
      * 构建最终模型：添加所有列生成的订单变量 + 完整约束
@@ -89,7 +93,7 @@ public class RLMPSolve {
                     0.0,
                     1.0,
                     order.getPrice(),
-                    GRB.CONTINUOUS,
+                    GRB.BINARY,
                     "Final_Order_" + orderId
             );
             orderVarMap.put(orderId, var);
@@ -142,34 +146,14 @@ public class RLMPSolve {
         }
         System.out.println("最终模型添加 " + instance.getCarrierList().size() + " 个载具约束");
 
-        // 4. 添加承运人距离约束（sum(x_i * 订单i的距离) ≤ 承运人最大允许距离）
-        for (Carrier carrier : instance.getCarrierList()) {
-            // 约束名称需唯一，避免与现有约束冲突（如在原名称后加"_distance"）
-            String distanceConstName = carrier.getConstName() + "_distance";
-            GRBLinExpr distanceExpr = new GRBLinExpr();
-
-            for (Map.Entry<String, GRBVar> entry : orderVarMap.entrySet()) {
-                GRBVar var = entry.getValue();
-                Order order = findOrderById(entry.getKey());
-                if (order == null) continue;
-
-                // 仅统计当前承运人绑定的订单的距离
-                if (order.getCarrier() != null && order.getCarrier().getIndex().equals(carrier.getIndex())) {
-                    // 系数 = 订单的总行驶距离（totalDistance）
-                    double orderDistance = order.getDistance();
-                    distanceExpr.addTerm(orderDistance, var);
-                }
+        GRBLinExpr objExpr = new GRBLinExpr();
+        for (Map.Entry<String, GRBVar> entry : orderVarMap.entrySet()) {
+            Order order = findOrderById(entry.getKey());
+            if (order != null) {
+                objExpr.addTerm(order.getPrice(), entry.getValue()); // 变量+系数
             }
-
-            // 添加约束：总距离 ≤ 承运人最大允许距离
-            finalModel.addConstr(
-                    distanceExpr,
-                    GRB.LESS_EQUAL,
-                    carrier.getMaxDistance(),  // 右边界：载具最大允许距离
-                    distanceConstName
-            );
         }
-        System.out.println("最终模型添加 " + instance.getCarrierList().size() + " 个载具距离约束");
+        finalModel.setObjective(objExpr, GRB.MAXIMIZE); // 同时设置表达式和方向
 
         // 更新模型使变量和约束生效
         finalModel.update();
@@ -222,19 +206,8 @@ public class RLMPSolve {
             }
         }
         System.out.println("选中的最优订单数：" + optimalOrders.size());
-
-        // 3. 解析约束对偶值（影子价格）
-        for (GRBConstr constr : finalModel.getConstrs()) {
-            String constName = constr.get(GRB.StringAttr.ConstrName);
-            double dualValue = constr.get(GRB.DoubleAttr.Pi);
-            finalDuals.put(constName, dualValue);
-            if (dualValue > epsilon) {
-                System.out.println("约束[" + constName + "]：对偶值（影子价格）=" + String.format("%.4f", dualValue) + "（资源稀缺）");
-            }
-        }
-
         // 4. 验证约束满足情况
-        verifyConstraints();
+        // verifyConstraints();
     }
 
     /**
@@ -277,6 +250,7 @@ public class RLMPSolve {
         }
     }
 
+
     /**
      * 释放Gurobi资源
      */
@@ -284,6 +258,7 @@ public class RLMPSolve {
         finalModel.dispose();
         env.dispose();
     }
+
 
     /**
      * 辅助方法：通过订单ID查找订单
@@ -296,5 +271,4 @@ public class RLMPSolve {
         }
         return null;
     }
-
 }

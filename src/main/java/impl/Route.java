@@ -5,7 +5,6 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -26,8 +25,8 @@ public class Route {
     public Route(Integer depot) {
         this.distance = 0.0;
         this.visitNumber = 0;
-        this.maxDistance = Constants.MAXDISTANCE;
-        this.maxVisitNumber = Constants.MAXVISITNUMBER;
+        this.maxDistance = Constants.MAX_DISTANCE;
+        this.maxVisitNumber = Constants.MAX_VISIT_NUM;
         this.fenceList = new ArrayList<>();
         this.depot = depot;
     }
@@ -37,8 +36,8 @@ public class Route {
         this.distance = total_dist;
         this.visitNumber = total_visit_num;
         this.fenceList = fenceIndexList;
-        this.maxDistance = Constants.MAXDISTANCE;
-        this.maxVisitNumber = Constants.MAXVISITNUMBER;
+        this.maxDistance = Constants.MAX_DISTANCE;
+        this.maxVisitNumber = Constants.MAX_VISIT_NUM;
         this.depot = depot;
         this.MaxDispatchNum = MaxDispatchNum;
     }

@@ -34,7 +34,8 @@ public class Label {
         this.loadedQuantity = loadedQuantity;
         this.travelDistance = travelDistance;
         this.visitNum = visitNum;
-        this.fenceIndexList = generatePath(); // 初始化路径
+        this.fenceIndexList = generatePath();
+        this.startDepotIdx = startDepotIdx;
     }
 
 

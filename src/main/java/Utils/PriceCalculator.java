@@ -24,7 +24,7 @@ public class PriceCalculator {
             throw new IllegalArgumentException("Order must be bound to a carrier");
         }
 
-        // 1. 路径原始收益（已扣除所有成本，对应order.getPrice()）
+        // 1. 路径原始收益
         double price = order.getPrice();
 
         // 2. 围栏需求约束的对偶值影响：sum(装载量 × 围栏对偶值)

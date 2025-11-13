@@ -35,7 +35,7 @@ public class Instance {
         fences.generateFenceIndexList();
         depots.generateDepotIndexList();
         depotDistanceMatrix = depots.generateDepotDistanceMatrix();
-        carrierList = initializer.carrierInitializer(Constants.ISDIFFERENTCARRIER);
+        carrierList = initializer.carrierInitializer(Constants.IS_DIFFERENT_CARRIER);
         carriers.setCarrierList(carrierList);
         orderList = null;
     }

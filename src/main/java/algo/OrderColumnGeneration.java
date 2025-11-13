@@ -17,7 +17,6 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Setter
 @Getter
@@ -52,7 +51,7 @@ public class OrderColumnGeneration {
         this.constraintsMap = new HashMap<>();
         this.bidLabeling = new BidLabeling(this.instance);
         this.bidLabeling.setOutputFlag(false);
-        this.bidLabeling.setOrderLimit(Constants.ITERATIONCOLUMNNUM);
+        this.bidLabeling.setOrderLimit(Constants.ITERATION_COLUMN_NUM);
 
         // 初始化环境和模型
         this.env = new GRBEnv();
@@ -128,49 +127,65 @@ public class OrderColumnGeneration {
     public List<Order> solve() throws GRBException {
         this.startTime = CommonUtils.currentTimeInSecond();
         this.iterationCnt = 0;
-        int lastIterationTime = 0;
-        List<Order> allOrders = new ArrayList<>(); // 存储所有生成的路径订单
+        List<Order> allOrders = new ArrayList<>();
 
-        // 迭代条件：剩余时间>0、未超过最大列数
-        while (getIterationTimeLimitLeft() > lastIterationTime && allOrders.size() <= Constants.MAXRMLPCOLUMNS) {
-            int iterStartTime = CommonUtils.currentTimeInSecond();
-            iterationCnt++;
+        // 总时间限制
+        int totalTimeLimit = Constants.ITERATION_TIME_LIMIT;
 
-            // 1. 子问题生成新路径（订单）
-            List<Order> newOrders = generateOrders();
-            if (newOrders.isEmpty()) {
-                if (outputFlag) {
-                    System.out.println("迭代" + iterationCnt + "：无新路径生成，退出迭代");
-                }
+        // 循环条件：剩余时间>0 且 未超过最大列数
+        while (true) {
+            // 1. 检查是否已超时或达到最大列数，提前退出
+            int elapsedTime = CommonUtils.currentTimeInSecond() - startTime;
+            int remainingTime = totalTimeLimit - elapsedTime;
+            if (remainingTime <= 0) {
+                System.out.println("总时间已超限（" + elapsedTime + "/" + totalTimeLimit + "秒），退出迭代");
+                break;
+            }
+            if (allOrders.size() >= Constants.MAX_RLMP_COLUMNS) {
+                System.out.println("路径数超过最大限制" + Constants.MAX_RLMP_COLUMNS + "，退出迭代");
                 break;
             }
 
-            // 2. 添加新列（路径变量）到主问题
+            iterationCnt++;
+            int iterStartTime = CommonUtils.currentTimeInSecond();
+
+            // 2. 子问题生成新路径
+            List<Order> newOrders;
+            try {
+                newOrders = generateOrders();
+            } catch (Exception e) {
+                System.out.println("迭代" + iterationCnt + "生成路径失败：" + e.getMessage());
+                break;
+            }
+            if (newOrders.isEmpty()) {
+                System.out.println("迭代" + iterationCnt + "：无新路径生成，退出迭代");
+                break;
+            }
+
+            // 4. 添加新列到主问题
             addRLMPColumns(newOrders);
             allOrders.addAll(newOrders);
 
-            // 3. 求解主问题并更新对偶值（用于下一轮子问题定价）
+            // 5. 求解主问题并更新对偶值（耗时操作，建议增加超时检查）
             solveRLMPAndUpdateDuals();
 
-            // 4. 输出迭代信息
+            // 6. 检查主问题后是否超时
+            if (CommonUtils.currentTimeInSecond() - startTime >= totalTimeLimit) {
+                System.out.println("迭代" + iterationCnt + "：主问题求解超时");
+                break;
+            }
+
+            // 7. 输出迭代信息
             if (outputFlag) {
                 displayIterationInformation();
             }
 
-            // 5. 更新迭代耗时，判断是否超时
-            lastIterationTime = CommonUtils.currentTimeInSecond() - iterStartTime;
-            if (getIterationTimeLimitLeft() < lastIterationTime) {
-                System.out.println("迭代" + iterationCnt + "：剩余时间不足，超时退出");
-                break;
-            }
-            if (allOrders.size() > Constants.MAXRMLPCOLUMNS) {
-                System.out.println("迭代" + iterationCnt + "：路径数超过最大限制" + Constants.MAXRMLPCOLUMNS + "，退出迭代");
-                break;
-            }
+            System.out.println("当前池中列数：" + allOrders.size() + "累计耗时：" + (CommonUtils.currentTimeInSecond() - startTime) + "秒");
         }
 
-        // 释放Gurobi资源
+        // 释放资源
         env.dispose();
+        System.out.println("进入RMP的总列数：" + allOrders.size());
         return allOrders;
     }
 
@@ -264,7 +279,7 @@ public class OrderColumnGeneration {
 
         // 7. 批量更新模型（生效所有变量和系数变更）
         RLMPSolver.update();
-        System.out.printf("本次添加新路径：%d个，当前总路径数：%d%n", addedCount, RLMPVariables.size());
+        System.out.printf("当前总路径数：%d%n", RLMPVariables.size());
     }
 
 

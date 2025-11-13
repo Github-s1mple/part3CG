@@ -4,23 +4,38 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.util.ArrayList;
+import java.util.List;
+
 @Setter
 @Getter
 public class Orders {
+    private List<Order> orderList;
     private int orderNumber;
-    private ArrayList<Order> orderList;
-    private double deliverPrice;
+    private double totalDeliverPrice;
+    private double totalDispatchNum;
+    private double totalCarrierCost;
+    private double totalDistance;
+    private int totalFenceNum;
 
-    public Orders() {
-        this.orderNumber = 0;
-        this.orderList = new ArrayList<>();
-        this.deliverPrice = 0.0;
+    public Orders(List<Order> orderList) {
+        this.orderList = orderList;
+        orderNumber = 0;
+        totalCarrierCost = 0.0;
+        totalDistance = 0.0;
+        totalFenceNum = 0;
+        totalDispatchNum = 0.0;
+        totalDeliverPrice = 0.0;
+        calOrderDetail();
     }
 
-    public void calPrice() {
+    public void calOrderDetail() {
         for (Order order : orderList) {
-            this.deliverPrice += order.getPrice();
+            totalDeliverPrice += order.getPrice();
+            totalCarrierCost += order.getCarrierCost();
+            totalDistance += order.getDistance();
+            totalFenceNum += order.getFenceNumber();
+            totalDispatchNum += order.getDispatchNum();
         }
+        orderNumber = orderList.size();
     }
-
 }
