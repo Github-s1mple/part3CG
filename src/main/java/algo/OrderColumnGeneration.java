@@ -62,7 +62,7 @@ public class OrderColumnGeneration {
         this.RLMPSolver.set(GRB.DoubleParam.FeasibilityTol, 1e-5);
         this.RLMPSolver.set(GRB.IntParam.Presolve, 1); // 启用预处理，提升求解效率
 
-        // 初始化空约束框架（围栏+承运人）
+        // 初始化空约束框架（围栏+载具）
         initializeEmptyConstraints();
 
         // 初始化对偶值（避免后续空指针，初始设为0）
@@ -74,7 +74,7 @@ public class OrderColumnGeneration {
     /**
      * 初始化空约束框架（仅保留2类约束）
      * 1. 围栏容量约束：sum(x_r * load_{r,f}) ≤ 围栏f的最大容量
-     * 2. 承运人名额约束：sum(x_r * 1) ≤ 1（每个载具最终仅选1条路径）
+     * 2. 载具名额约束：sum(x_r * 1) ≤ 1（每个载具最终仅选1条路径）
      */
     private void initializeEmptyConstraints() throws GRBException {
         // 1. 围栏容量约束（保留不变）
@@ -90,7 +90,7 @@ public class OrderColumnGeneration {
             }
         }
 
-        // 2. 承运人名额约束（保留不变，已设置maxUseTimes=1）
+        // 2. 载具名额约束（保留不变，已设置maxUseTimes=1）
         for (Carrier carrier : instance.getCarrierList()) {
             String constName = carrier.getConstName();
             GRBLinExpr emptyExpr = new GRBLinExpr(); // 空表达式（无变量）
@@ -99,14 +99,14 @@ public class OrderColumnGeneration {
             );
             constraintsMap.put(constName, constr);
             if (outputFlag) {
-                System.out.println("初始化空约束：承运人名额约束-" + constName + "，最大使用次数=" + carrier.getMaxUseTimes());
+                System.out.println("初始化空约束：载具名额约束-" + constName + "，最大使用次数=" + carrier.getMaxUseTimes());
             }
         }
     }
 
 
     /**
-     * 初始化对偶值（围栏+承运人资源+承运人距离，初始为0）
+     * 初始化对偶值（围栏+载具资源+载具距离，初始为0）
      */
     private void initDualValues() {
         // 1. 围栏约束对偶值（保留不变）
@@ -114,7 +114,7 @@ public class OrderColumnGeneration {
             this.dualsOfRLMP.put(fence.getConstName(), 0.0);
         }
 
-        // 2. 承运人名额约束对偶值（保留不变）
+        // 2. 载具名额约束对偶值（保留不变）
         for (Carrier carrier : instance.getCarrierList()) {
             this.dualsOfRLMP.put(carrier.getConstName(), 0.0);
         }
@@ -150,12 +150,7 @@ public class OrderColumnGeneration {
 
             // 2. 子问题生成新路径
             List<Order> newOrders;
-            try {
-                newOrders = generateOrders();
-            } catch (Exception e) {
-                System.out.println("迭代" + iterationCnt + "生成路径失败：" + e.getMessage());
-                break;
-            }
+            newOrders = generateOrders();
             if (newOrders.isEmpty()) {
                 System.out.println("迭代" + iterationCnt + "：无新路径生成，退出迭代");
                 break;
@@ -235,7 +230,6 @@ public class OrderColumnGeneration {
      * 核心：创建路径变量 + 更新约束系数（不重建约束）
      */
     private void addRLMPColumns(List<Order> newOrders) throws GRBException {
-        int addedCount = 0;
         for (Order order : newOrders) {
             String orderId = String.valueOf(order.getOrderId());
 
@@ -248,7 +242,7 @@ public class OrderColumnGeneration {
             }
 
             // 2. 创建路径变量（原有代码不变）
-            double pathProfit = order.getPrice(); // 目标函数系数=路径收益（最大化）
+            double pathProfit = order.getOriginalPrice(); // 目标函数系数=路径收益（最大化）
             GRBVar pathVar = RLMPSolver.addVar(
                     0.0,                // 下界：不选该路径
                     1.0,                // 上界：仅允许一次访问
@@ -260,16 +254,15 @@ public class OrderColumnGeneration {
             // 3. 缓存变量和订单映射
             RLMPVariables.put(orderId, pathVar);
             orderIdMap.put(orderId, order);
-            addedCount++;
 
             // 4. 更新围栏约束系数（保留不变）
             updateFenceConstraintCoeff(order, pathVar);
 
-            // 5. 更新承运人名额约束系数（保留不变）
+            // 5. 更新载具名额约束系数（保留不变）
             updateCarrierConstraintCoeff(order, pathVar);
 
             if (outputFlag) {
-                System.out.printf("添加新路径：ID=%s，收益=%.2f，负载围栏数=%d，承运人=%s，距离=%.2f%n",
+                System.out.printf("添加新路径：ID=%s，收益=%.2f，负载围栏数=%d，载具=%s，距离=%.2f%n",
                         orderId, pathProfit, order.getLoads().size(),
                         (order.getCarrier() != null ? order.getCarrier().getIndex() : "无"),
                         order.getDistance());
@@ -326,14 +319,14 @@ public class OrderColumnGeneration {
 
 
     /**
-     * 更新承运人约束系数
+     * 更新载具约束系数
      */
     private void updateCarrierConstraintCoeff(Order order, GRBVar orderVar) throws GRBException {
         String orderId = String.valueOf(order.getOrderId());
         Carrier carrier = order.getCarrier();
 
         if (carrier == null) {
-            System.out.printf("警告：路径%s未绑定承运人，跳过承运人约束更新%n", orderId);
+            System.out.printf("警告：路径%s未绑定载具，跳过载具约束更新%n", orderId);
             return;
         }
 
@@ -341,7 +334,7 @@ public class OrderColumnGeneration {
         GRBConstr constr = constraintsMap.get(constName);
 
         if (constr == null) {
-            System.out.printf("警告：承运人约束%s未初始化，自动补全空约束%n", constName);
+            System.out.printf("警告：载具约束%s未初始化，自动补全空约束%n", constName);
             GRBLinExpr emptyExpr = new GRBLinExpr();
             constr = RLMPSolver.addConstr(emptyExpr, GRB.LESS_EQUAL, carrier.getMaxUseTimes(), constName);
             constraintsMap.put(constName, constr);
@@ -351,7 +344,7 @@ public class OrderColumnGeneration {
         RLMPSolver.chgCoeff(constr, orderVar, 1.0);  // 核心修改：用模型对象调用chgCoeff
 
         if (outputFlag) {
-            System.out.printf("路径%s：绑定承运人%d，已添加到约束%s%n",
+            System.out.printf("路径%s：绑定载具载具%d，已添加到约束%s%n",
                     orderId, carrier.getIndex(), constName);
         }
     }

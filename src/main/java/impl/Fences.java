@@ -26,6 +26,7 @@ public class Fences {
                 return fence;
             }
         }
+        System.err.println("解析围栏 " + fenceIndex + " 失败");
         return null;
     }
 

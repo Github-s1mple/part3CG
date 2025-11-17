@@ -11,6 +11,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 import static baseinfo.MapDistance.calculateSphericalDistance;
 
@@ -35,12 +36,12 @@ public class Initializer {
         System.out.println("开始初始化围栏...");
         fenceList = new ArrayList<>();
 
-        try (FileInputStream fis = new FileInputStream(Constants.ALGO_MODE == "CG" ? Constants.allPointsFilePath: Constants.allPointsTestFilePath);
+        try (FileInputStream fis = new FileInputStream(Objects.equals(Constants.ALGO_MODE, "CG") ? Constants.allPointsFilePath: Constants.allPointsTestFilePath);
              Workbook workbook = new XSSFWorkbook(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0); // 获取第一个工作表
             int headerRowNum = 0; // 表头行索引（假设第0行为表头）
-            int index = 0; // 顺序编号，从0开始
+            int index = 1; // 顺序编号，从1开始
 
             // 遍历数据行（从表头下一行开始）
             for (int rowNum = headerRowNum + 1; rowNum <= sheet.getLastRowNum(); rowNum++) {
@@ -48,8 +49,9 @@ public class Initializer {
                 if (row == null) continue;
 
                 try {
-                    int currentIndex = index; // 当前行的序号
+                    int currentIndex = index;
                     index++;
+
                     double lon = getCellNumericValue(row.getCell(1));
                     double lat = getCellNumericValue(row.getCell(2));
                     double totalDemand = getCellNumericValue(row.getCell(3)); // 第5列（索引4）
@@ -83,11 +85,9 @@ public class Initializer {
         } catch (IOException e) {
             // 捕获IO异常（如文件不存在、读取失败等），打印信息后停止程序
             System.err.println("处理Excel文件时发生错误：" + e.getMessage());
-            e.printStackTrace(); // 打印详细异常栈
-            System.exit(1); // 非0状态码表示异常退出
         }
         fenceNum = fenceList.size();
-        System.out.println("成功生成围栏数：" + fenceList.size());
+        System.out.println("成功生成围栏数：" + fenceNum);
         return fenceList;
     }
 
@@ -99,7 +99,7 @@ public class Initializer {
         }
 
         depotList = new ArrayList<>();
-        try (FileInputStream fis = new FileInputStream(Constants.ALGO_MODE == "CG" ? Constants.candidatePointsFilePath : Constants.candidatePointsTestFilePath);
+        try (FileInputStream fis = new FileInputStream(Objects.equals(Constants.ALGO_MODE, "CG") ? Constants.candidatePointsFilePath : Constants.candidatePointsTestFilePath);
              Workbook workbook = WorkbookFactory.create(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0);
@@ -118,7 +118,7 @@ public class Initializer {
                 }
 
                 // 创建Depot并计算到所有围栏的距离
-                Depot depot = new Depot(rowNum, depotLon, depotLat);
+                Depot depot = new Depot(-rowNum, depotLon, depotLat);
                 depot.generateDistanceMap(fenceCoordinates);
                 depotList.add(depot);
             }
@@ -138,13 +138,12 @@ public class Initializer {
             System.out.println("当前未提供载具信息");
             return carrierList;
         } else {
-            int index = 0; // 顺序编号，从0开始
-            for (index = 0; index < depotNum; index++) {
+            Integer startDepotIndex = 1;
+            for (int index = 0; index < depotNum; index++) {
 
                 try {
-                    int currentIndex = index; // 当前行的序号
+                    int currentIndex = startDepotIndex; // 当前行的序号
                     Double capacity = Constants.MAX_CAPACITY;
-                    Double price = Constants.DELIVER_COST_PER_METER;
                     Double maxDistance = Constants.MAX_DISTANCE;
                     Double minRatioCapacity = Constants.MIN_CARRIER_LOAD;
 
@@ -157,7 +156,7 @@ public class Initializer {
                     );
 
                     carrierList.add(carrier);
-
+                    startDepotIndex++;
                 } catch (Exception e) {
                     System.err.println("创建载具 " + index + " 失败：" + e.getMessage());
                 }

@@ -77,7 +77,7 @@ public class BidLabeling {
         this.forwardLabelPool = new ArrayList<>();
         this.backwardLabelPool = new ArrayList<>();
 
-        // 5. 调用初始化方法（移除原单仓库逻辑，后续由initializeMultiDepotUnloadingLabels接管多起点）
+        // 5. 调用初始化方法
         this.initialize();
         System.out.println("算法初始化完成！");
     }
@@ -95,7 +95,7 @@ public class BidLabeling {
 
         for (Integer i : depots.getDepotIndexList()) {
             Depot depot = depots.getDepot(i);
-            for (Integer j : depot.getVaildArcFence()) {
+            for (Integer j : depot.getValidArcFence()) {
                 Fence fenceJ = fences.getFence(j);
                 double currentDist = depot.getDistance(fenceJ);
                 depot.setNearestDiffLabelDist(min(depot.getNearestDiffLabelDist(), currentDist));
@@ -208,22 +208,19 @@ public class BidLabeling {
         }
     }
 
-    // 核心修改1：基于Depots类初始化多仓库标签（强制起点=终点）
+    // 基于Depots类初始化多仓库标签（强制起点=终点）
     private void initializeMultiDepotUnloadingLabels() {
-        // 1. 通过Depots类获取所有真实仓库索引（不再依赖fences，统一仓库管理）
-        List<Integer> allDepotIndexes = depots.getDepotIndexes();
-        if (allDepotIndexes.isEmpty()) {
+        // 1. 通过Depots类获取所有真实仓库索引
+        if (depots.getDepotIndexes().isEmpty()) {
             throw new IllegalArgumentException("Depots类中未配置任何起点仓库，无法初始化标签");
         }
 
-        // 2. 为每个仓库创建前向初始标签（起点=当前仓库，后续必须返回此仓库）
-        // 前向标签初始化：添加当前仓库到禁忌表
-        for (Integer depotIdx : allDepotIndexes) {
-            BitSet forwardTabu = new BitSet(fences.size());
-            forwardTabu.set(depotIdx);
+        // 2. 为每个仓库创建初始标签
+        for (Integer depotIdx : depots.getDepotIndexes()) {
+            BitSet forwardTabu = new BitSet(fences.getFenceNum());
             Label forwardInit = Label.generate(
                     true,
-                    depotIdx,
+                    0,
                     null,
                     forwardTabu,
                     0.0,
@@ -235,12 +232,11 @@ public class BidLabeling {
         }
 
         // 后向标签初始化：添加当前仓库到禁忌表
-        for (Integer depotIdx : allDepotIndexes) {
-            BitSet backwardTabu = new BitSet(fences.size());
-            backwardTabu.set(depotIdx);
+        for (Integer depotIdx : depots.getDepotIndexes()) {
+            BitSet backwardTabu = new BitSet(fences.getFenceNum());
             Label backwardInit = Label.generate(
                     false,
-                    depotIdx,
+                    0,
                     null,
                     backwardTabu,
                     0.0,
@@ -252,13 +248,13 @@ public class BidLabeling {
         }
     }
 
-    // 核心修改2：扩展逻辑强化（禁止扩展到其他仓库，仅允许返回归属仓库）
+    // 标签扩展
     private void labelExpand(Label label) {
         Fence currentFence;
-        if (label.getParent() == null){
+        if (label.getParent() == null || label.getCurFence() == 0){
             Depot depot = depots.getDepot(label.getStartDepotIdx());
             currentFence = depot.depot2Fence(999);
-        }else{
+        } else {
             currentFence = fences.getFence(label.getCurFence());
         }
         boolean isForward = label.isForward();
@@ -286,7 +282,7 @@ public class BidLabeling {
 
                 // 访问次数约束（仅卸货点计数，归属仓库不计入）
                 int newVisitNum = label.getVisitNum() + 1;
-                if (newVisitNum > Constants.MAX_VISIT_NUM) {
+                if (newVisitNum > Constants.MAX_VISIT_NUM / 2) {
                     continue;
                 }
 
@@ -298,7 +294,7 @@ public class BidLabeling {
 
                 // 距离约束（含归属仓库的距离计算）
                 double distance_ = currentFence.getDistance(nextNode) + label.getTravelDistance();
-                if (distance_ > Constants.MAX_DISTANCE) {
+                if (distance_ > Constants.MAX_DISTANCE / 2.0) {
                     continue;
                 }
 
@@ -321,14 +317,14 @@ public class BidLabeling {
         }
     }
 
-    private void dominantAdd(Label label, int fenceIdx) {
+    private void dominantAdd(Label label, Integer fenceIdx) {
         boolean isForward = label.isForward();
         int li = 0;
-        while (li < this.labelPool.get(fenceIdx).size()) {
-            Label labelI = this.labelPool.get(fenceIdx).get(li);
+        while (li < this.labelPool.get(fenceIdx - 1).size()) {
+            Label labelI = this.labelPool.get(fenceIdx - 1).get(li);
             // 是否存在围栏相同，但是路径更短的，如果存在就替换并删除搜索队列中的标号，如果更差则放弃
             if (this.dominantRule(label, labelI) == 1) {
-                this.labelPool.get(fenceIdx).remove(li);
+                this.labelPool.get(fenceIdx - 1).remove(li);
                 if (isForward) {
                     this.forwardLabelQueue.remove(labelI);
                 } else {
@@ -340,7 +336,7 @@ public class BidLabeling {
                 li += 1;
             }
         }
-        this.labelPool.get(fenceIdx).add(label);
+        this.labelPool.get(fenceIdx - 1).add(label);
         if (isForward) {
             this.forwardLabelQueue.add(label);
         } else {
@@ -365,14 +361,14 @@ public class BidLabeling {
 
     // 核心修改4：标号连接（强制归属仓库一致，路径闭环=起点→卸货点→起点）
     private void labelConnect(Label forwardLabel, Label backwardLabel) {
-        // 1. 强制校验：前后向标签归属仓库必须一致（禁止跨仓库）
+        // 1. 前后向标签归属仓库必须一致
         Integer forwardBelongDepot = forwardLabel.getStartDepotIdx();
         Integer backwardBelongDepot = backwardLabel.getStartDepotIdx();
         if (!Objects.equals(forwardBelongDepot, backwardBelongDepot)) {
             return;
         }
 
-        // 2. 节点连接校验：前向终点+后向起点必须满足"卸货点→卸货点"或"卸货点→归属仓库"
+        // 2. 前向终点+后向起点
         Fence forwardEnd = fences.getFence(forwardLabel.getCurFence());
         Fence backwardStart = fences.getFence(backwardLabel.getCurFence());
 
@@ -404,15 +400,8 @@ public class BidLabeling {
         BitSet backwardVisited = backwardLabel.getTabu();
         BitSet intersection = (BitSet) forwardVisited.clone();
         intersection.and(backwardVisited);
-        boolean hasDuplicateUnloading = false;
-        for (int i = intersection.nextSetBit(0); i >= 0; i = intersection.nextSetBit(i + 1)) {
-            // 排除归属仓库，其他重复节点均为无效
-            if (i != forwardBelongDepot) {
-                hasDuplicateUnloading = true;
-                break;
-            }
-        }
-        if (hasDuplicateUnloading) {
+
+        if (!intersection.isEmpty()) {
             return;
         }
         //TODO:利润剪枝
@@ -425,6 +414,14 @@ public class BidLabeling {
         ArrayList<Integer> fenceIndexList = new ArrayList<>();
         fenceIndexList.addAll(forwardRoute);
         fenceIndexList.addAll(backwardRoute);
+
+        // 删除第一个和最后一个元素
+        if (fenceIndexList.size() >= 2 && fenceIndexList.getFirst() == 0 && fenceIndexList.getLast() == 0) {// 避免空列表或只有一个元素时索引越界
+            fenceIndexList.removeFirst(); // 删除第一个元素
+            fenceIndexList.removeLast(); // 删除最后一个元素
+        } else if (!fenceIndexList.isEmpty()) { // 只有一个元素时清空列表
+            fenceIndexList.clear();
+        }
 
         // 构造完整路径
         Route route = Route.generate(
@@ -452,7 +449,7 @@ public class BidLabeling {
             return;
         }
 
-        if (order.getPrice() < Constants.OBJ_LB) {
+        if (order.getOriginalPrice() < Constants.OBJ_LB) {
             return;
         }
 
@@ -463,7 +460,7 @@ public class BidLabeling {
         }
         this.visited2order.put(route.getRouteVitedString(), order);
         this.orderPool.add(order);
-        this.bestObj = Math.max(this.bestObj, order.getPrice());
+        this.bestObj = Math.max(this.bestObj, order.getOriginalPrice());
     }
 
     private Order loading(Route route) {
@@ -476,8 +473,8 @@ public class BidLabeling {
         if (!ConstraintsManager.isOrderFeasible(order, this.fences)) {
             return null;
         }
-
-        order.setPrice(PriceCalculator.calculatePrimalObj(order));
+        order.setDualPrice(PriceCalculator.calculateDualObj(order));
+        order.setOriginalPrice(PriceCalculator.calculatePrimalObj(order));
         return order;
     }
 
@@ -487,27 +484,9 @@ public class BidLabeling {
         return orders;
     }
 
-    private void add_record(String filter_name) {
-        if (this.outputFlag) {
-            this.recordDict.put(filter_name, this.recordDict.getOrDefault(filter_name, 0) + 1);
-        }
-    }
-
     public void displayIterationInformationIfNecessary(int iterationCnt) {
         if (this.outputFlag) {
             this.displayIterationInformation(iterationCnt);
         }
-    }
-
-    public void setOutputFlag(Boolean outputFlag) {
-        this.outputFlag = outputFlag;
-    }
-
-    public void setTimeLimit(Integer timeLimit) {
-        this.timeLimit = timeLimit;
-    }
-
-    public void setOrderLimit(Integer orderLimit) {
-        this.orderLimit = orderLimit;
     }
 }

@@ -3,7 +3,6 @@ package impl;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.ArrayList;
 import java.util.List;
 
 @Setter
@@ -29,8 +28,11 @@ public class Orders {
     }
 
     public void calOrderDetail() {
+        if (orderList == null) {
+            return;
+        }
         for (Order order : orderList) {
-            totalDeliverPrice += order.getPrice();
+            totalDeliverPrice += order.getOriginalPrice();
             totalCarrierCost += order.getCarrierCost();
             totalDistance += order.getDistance();
             totalFenceNum += order.getFenceNumber();

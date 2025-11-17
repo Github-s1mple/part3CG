@@ -4,6 +4,7 @@ import impl.*;
 
 public class ConstraintsManager {
     public static boolean isOrderFeasible(Order order, Fences fences){
+        //TODO
         return true;
     }
 

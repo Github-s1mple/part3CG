@@ -65,12 +65,6 @@ public class Label {
     // 参数校验：确保核心字段合法
     private static void validateParams(Integer curFence, BitSet tabu,
                                        double unloadedQuantity, double travelDistance, int visitNum) {
-        if (curFence < 0) {
-            throw new IllegalArgumentException("当前节点索引不能为负：" + curFence);
-        }
-        if (!tabu.get(curFence)) {
-            throw new IllegalArgumentException("禁忌表必须包含当前节点：" + curFence);
-        }
         if (unloadedQuantity < 0) {
             throw new IllegalArgumentException("卸货量不能为负：" + unloadedQuantity);
         }

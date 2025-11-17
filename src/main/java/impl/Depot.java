@@ -12,15 +12,14 @@ import java.util.List;
 @Setter
 @Getter
 public class Depot {
-    private Integer index;
+    private Integer index; // 仓库索引为负
     private Double capacity;
     private final double longitude; // 经度
     private final double latitude;  // 纬度
-    private ArrayList<Integer> vaildArcFence;
+    private ArrayList<Integer> validArcFence;
     private double nearestDiffLabelDist;
     private String constName;
     private double originalDepotValue;
-    private double depotValue;
     private final HashMap<Integer, Double> depotMap; // 围栏index→距离映射
     private int minDispatchNum;
     private int maxDispatchNum;
@@ -31,22 +30,22 @@ public class Depot {
         this.longitude = longitude;
         this.latitude = latitude;
         this.depotMap = new HashMap<>();
-        this.vaildArcFence = new ArrayList<>();
+        this.validArcFence = new ArrayList<>();
         this.constName = "D" + index;
         this.nearestDiffLabelDist = 9999.0;
     }
 
     public void generateDistanceMap(List<double[]> fenceCoordinates){
-        for (int fenceIndex = 0; fenceIndex < fenceCoordinates.size(); fenceIndex++) {
-            double[] fence = fenceCoordinates.get(fenceIndex);
+        for (Integer index = 0; index < fenceCoordinates.size(); index++) {
+            double[] fence = fenceCoordinates.get(index);
             // 调用MapDistance的球面距离计算方法
             double distance = MapDistance.calculateSphericalDistance(
                     latitude, longitude,  // Depot的纬度、经度
                     fence[1], fence[0]   // 围栏的纬度（fence[1]）、经度（fence[0]）
             );
-            depotMap.put(fenceIndex, distance);
+            depotMap.put(index + 1, distance);
             if (distance <= Constants.MAX_DISTANCE / 2){
-                vaildArcFence.add(fenceIndex);
+                validArcFence.add(index + 1);
             }
         }
     }
@@ -60,12 +59,12 @@ public class Depot {
     }
 
     public Fence depot2Fence(Integer index){
-        Fence fence = new Fence(index, longitude, latitude, 0.0, 0.0, 0.0, 0.0, 0.0, false);
+        Fence fence = new Fence(index, longitude, latitude, 0.0, 0.0, 0.0, 0.0, 0.0, true);
         fence.setDistanceMap(depotMap);
-        fence.setFenceValue(depotValue);
+        fence.setFenceValue(0);
         fence.setMinDispatchNum(0.0);
         fence.setMaxDispatchNum(0.0);
-        fence.setVaildArcFence(vaildArcFence);
+        fence.setVaildArcFence(validArcFence);
         fence.setNearestDiffLabelDist(nearestDiffLabelDist);
         fence.setConstName("ND" + index);
         return fence;

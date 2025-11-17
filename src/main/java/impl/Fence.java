@@ -45,12 +45,12 @@ public class Fence {
     }
 
     public void generateDistanceMap(List<List<Double>> distanceMatrix){
-        List<Double> distances = distanceMatrix.get(index);
-        for (int targetIndex = 0; targetIndex < distances.size(); targetIndex++) {
+        List<Double> distances = distanceMatrix.get(index - 1);
+        for (Integer targetIndex = 0; targetIndex < distances.size(); targetIndex++) {
             Double distance = distances.get(targetIndex);
-            distanceMap.put(targetIndex, distance);
+            distanceMap.put(targetIndex + 1, distance);
             if (distance <= Constants.MAX_DISTANCE / 2){
-                vaildArcFence.add(targetIndex);
+                vaildArcFence.add(targetIndex + 1);
             }
         }
     }
@@ -65,6 +65,5 @@ public class Fence {
 
     public void addFakeDepot() {
         vaildArcFence.add(999);
-        return;
     }
 }

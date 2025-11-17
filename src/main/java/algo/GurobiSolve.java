@@ -797,7 +797,7 @@ public class GurobiSolve {
             order.setDispatchNum(totalLoad);
 
             double vehicleNetProfit = totalLoadProfit - transportCost;
-            order.setPrice(vehicleNetProfit);
+            order.setOriginalPrice(vehicleNetProfit);
             List<String> path = getVehiclePathInOrder(k, order);
             this.orderList.add(order);
         }
@@ -864,7 +864,7 @@ public class GurobiSolve {
             // ③ 载具k的净收益
             double vehicleNetProfit = totalLoadProfit - transportCost;
             System.out.printf("载具净收益：%s%n", df.format(vehicleNetProfit));
-            order.setPrice(vehicleNetProfit);
+            order.setOriginalPrice(vehicleNetProfit);
 
             // ④ 载具k的行驶路径（按顺序展示）
             System.out.println("行驶路径（按顺序）：");

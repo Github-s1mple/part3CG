@@ -22,15 +22,6 @@ public class Route {
     private Integer depot;
     private Double MaxDispatchNum;
 
-    public Route(Integer depot) {
-        this.distance = 0.0;
-        this.visitNumber = 0;
-        this.maxDistance = Constants.MAX_DISTANCE;
-        this.maxVisitNumber = Constants.MAX_VISIT_NUM;
-        this.fenceList = new ArrayList<>();
-        this.depot = depot;
-    }
-
     public Route(Fences fences, double total_dist, int total_visit_num, ArrayList<Integer> fenceIndexList, Integer depot, double MaxDispatchNum) {
         this.fences = fences;
         this.distance = total_dist;
@@ -42,7 +33,7 @@ public class Route {
         this.MaxDispatchNum = MaxDispatchNum;
     }
 
-    public static Route generate(Fences fences, double total_dist, int total_visit_num,ArrayList<Integer> fenceIndexList, Integer depot, double MaxDispatchNum) {
+    public static Route generate(Fences fences, double total_dist, int total_visit_num, ArrayList<Integer> fenceIndexList, Integer depot, double MaxDispatchNum) {
         return new Route(fences, total_dist, total_visit_num, fenceIndexList, depot, MaxDispatchNum);
     }
 

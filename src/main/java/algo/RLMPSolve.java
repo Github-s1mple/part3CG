@@ -92,7 +92,7 @@ public class RLMPSolve {
             GRBVar var = finalModel.addVar(
                     0.0,
                     1.0,
-                    order.getPrice(),
+                    order.getOriginalPrice(),
                     GRB.BINARY,
                     "Final_Order_" + orderId
             );
@@ -150,7 +150,7 @@ public class RLMPSolve {
         for (Map.Entry<String, GRBVar> entry : orderVarMap.entrySet()) {
             Order order = findOrderById(entry.getKey());
             if (order != null) {
-                objExpr.addTerm(order.getPrice(), entry.getValue()); // 变量+系数
+                objExpr.addTerm(order.getOriginalPrice(), entry.getValue()); // 变量+系数
             }
         }
         finalModel.setObjective(objExpr, GRB.MAXIMIZE); // 同时设置表达式和方向
@@ -201,7 +201,7 @@ public class RLMPSolve {
                 Order order = findOrderById(orderId);
                 if (order != null) {
                     optimalOrders.add(order);
-                    System.out.println("订单ID：" + orderId + "，选择比例：" + String.format("%.4f", varValue) + "，收益：" + order.getPrice());
+                    System.out.println("订单ID：" + orderId + "，选择比例：" + String.format("%.4f", varValue) + "，收益：" + order.getOriginalPrice());
                 }
             }
         }

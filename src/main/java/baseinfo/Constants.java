@@ -2,10 +2,10 @@ package baseinfo;
 
 public class Constants {
     // 模型参数
-    public static final Integer MAX_VISIT_NUM = 10;
-    public static final Double MAX_DISTANCE = 5.0;
+    public static final Integer MAX_VISIT_NUM = 8; //必须设置为偶数
+    public static final Double MAX_DISTANCE = 3.0;
     public static final Double DELIVER_COST_PER_METER = 0.00005;
-    public static final Double MAX_CAPACITY = 20.0;
+    public static final Double MAX_CAPACITY = 14.0;
     public static final Double MIN_CARRIER_LOAD = 5.0;
     public static final double DISTANCE_TO_NEAREST_FENCE = 0.1; //围栏初始价值定义方式：与最近仓库的距离 * 系数
 

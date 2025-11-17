@@ -6,7 +6,6 @@ import impl.Fences;
 import impl.Order;
 
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 public class PriceCalculator {
@@ -25,7 +24,7 @@ public class PriceCalculator {
         }
 
         // 1. 路径原始收益
-        double price = order.getPrice();
+        double price = order.getDualPrice();
 
         // 2. 围栏需求约束的对偶值影响：sum(装载量 × 围栏对偶值)
         double sumFenceDual = 0.0;
@@ -50,7 +49,7 @@ public class PriceCalculator {
         // 3. 载具使用次数的对偶值影响：使用次数 × 资源对偶值
         double carrierResourceDual = 1.0 * dualsOfRLMP.getOrDefault(carrier.getConstName(), 0.0);
 
-        // 5. 计算RC：原始收益 - 所有约束的边际成本总和
+        // 4. 计算RC：原始收益 - 所有约束的边际成本总和
         return price - (sumFenceDual + carrierResourceDual);
     }
 
@@ -64,13 +63,25 @@ public class PriceCalculator {
             Fence fence = order.getFences().getFence(fenceId);
 
             // 累加当前围栏的价值（装载量 × 单位价值）
-            totalValue += load * fence.getFenceValue();
+            totalValue += load * fence.getOriginalFenceValue();
         }
 
         return totalValue - order.getCarrierCost();
     }
 
-    public static double calculateDualObj(HashMap<Integer, Double> loads, Carrier carrier, Double dispatchNum, List<Integer> fenceIndexList) {
-        return 1.0;
+    public static double calculateDualObj(Order order){
+        double totalValue = 0.0;
+
+        // 遍历每个围栏的装载量，累加总价值
+        for (Map.Entry<Integer, Double> entry : order.getLoads().entrySet()) {
+            int fenceId = entry.getKey();       // 围栏编号
+            double load = entry.getValue();     // 该围栏的装载量
+            Fence fence = order.getFences().getFence(fenceId);
+
+            // 累加当前围栏的价值（装载量 × 单位价值）
+            totalValue += load * fence.getFenceValue();
+        }
+
+        return totalValue - order.getCarrierCost();
     }
 }

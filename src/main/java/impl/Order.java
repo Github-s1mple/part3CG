@@ -18,7 +18,8 @@ public class Order {
     private Integer depot;
     private int fenceNumber;
     private Carrier carrier;
-    private double price;
+    private double originalPrice;
+    private double dualPrice;
     private double dispatchNum;
     private double reducedCost;
     private double carrierCost;
@@ -37,7 +38,7 @@ public class Order {
         this.fenceList = route.getFenceList();
         this.carrier = carrier;
         this.depot = route.getDepot();
-        this.price = 0;
+        this.originalPrice = 0;
         calculateCarrierPrice();
     }
 
