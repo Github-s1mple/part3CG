@@ -147,7 +147,6 @@ public class OrderColumnGeneration {
             }
 
             iterationCnt++;
-            int iterStartTime = CommonUtils.currentTimeInSecond();
 
             // 2. 子问题生成新路径
             List<Order> newOrders;
@@ -279,7 +278,6 @@ public class OrderColumnGeneration {
 
         // 7. 批量更新模型（生效所有变量和系数变更）
         RLMPSolver.update();
-        System.out.printf("当前总路径数：%d%n", RLMPVariables.size());
     }
 
 
