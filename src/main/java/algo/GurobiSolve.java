@@ -92,7 +92,7 @@ public class GurobiSolve {
         carrierToDepotMap = new HashMap<>();
         for (int k : K) {
             Carrier carrier = carrierList.get(k - 1); // 载具ID从1开始
-            int depotId = - carrier.getDepot() - 1; // 例如：返回-1（仓库0）或-2（仓库1）
+            int depotId = - carrier.getDepot(); // 例如：返回-1（仓库0）或-2（仓库1）
             carrierToDepotMap.put(k, depotId);
         }
 
@@ -224,19 +224,19 @@ public class GurobiSolve {
                     double dist = 0.0;
                     try {
                         if (M.contains(i) && N.contains(j)) {
-                            // 仓库i → 围栏j
+                            // 仓库i → 围栏j(仓库使用的hashmap存的是1开始的围栏编号)
                             int depotIdx = -i - 1;
-                            int fenceIdx = j - 1;
+                            int fenceIdx = j;
                             HashMap<Integer, Double> distMap = depotToFenceDist.get(depotIdx);
                             dist = distMap.get(fenceIdx) * 1000; // 千米转米
                         } else if (N.contains(i) && M.contains(j)) {
                             // 围栏i → 仓库j
-                            int fenceIdx = i - 1;
+                            int fenceIdx = i;
                             int depotIdx = -j - 1;
                             HashMap<Integer, Double> distMap = depotToFenceDist.get(depotIdx);
                             dist = distMap.get(fenceIdx) * 1000;
                         } else if (N.contains(i) && N.contains(j)) {
-                            // 围栏i → 围栏j
+                            // 围栏i → 围栏j（围栏存的List（List）是从0开始的索引）
                             int fenceI = i - 1;
                             int fenceJ = j - 1;
                             dist = fenceToFenceDist.get(fenceI).get(fenceJ) * 1000;
@@ -270,7 +270,7 @@ public class GurobiSolve {
         // 2. 载具返回仓库约束
         addReturnAndStartDepotConstraints();
 
-        // 3. 路径连续性约束（流量守恒）
+        // 3. 路径流平衡约束
         addFlowConservationConstraints();
 
         // 4. 访问与路径关联约束（Zijk → Xik）
@@ -296,6 +296,12 @@ public class GurobiSolve {
 
         // 11. 单载具单仓库强约束
         addDepotOneCarrierConstraints();
+
+        // 12. 载具行驶距离约束
+        addVehicleDistanceConstraints();
+
+        // 13. 载具访问次数约束
+        addVehicleVisitNumConstraints();
 
         model.update();
         System.out.printf("约束添加完成：共%d条约束%n", constrMap.size());
@@ -357,7 +363,7 @@ public class GurobiSolve {
 
 
     /**
-     * 3. 路径连续性约束（流量守恒）
+     * 3. 路径连续性约束
      * 逻辑：对于围栏点i，载具k进入的路径数 = 离开的路径数
      * 数学表达：∀i∈N，∀k∈K，∑(j∈V\i) Zijk = ∑(j∈V\i) Zjik
      */
@@ -430,7 +436,7 @@ public class GurobiSolve {
 
 
     /**
-     * 5. 装载量与访问关联约束（双向）
+     * 5. 装载量与访问关联约束
      */
     private void addLoadVisitLinkConstraints() throws GRBException {
         double eps = 1e-6; // 极小值，避免数值误差
@@ -611,6 +617,78 @@ public class GurobiSolve {
                 }
             }
             GRBConstr constr = model.addConstr(expr, GRB.EQUAL, 1.0, constrName);
+            constrMap.put(constrName, constr);
+        }
+    }
+
+
+    /**
+     * 12. 载具行驶距离约束
+     * 逻辑：载具k的行驶距离 ≤ 最大行驶距离
+     */
+    private void addVehicleDistanceConstraints() throws GRBException {
+        List<HashMap<Integer, Double>> depotToFenceDist = instance.getDepotDistanceMatrix(); // 仓库-围栏距离
+        List<List<Double>> fenceToFenceDist = instance.getDistanceMatrix(); // 围栏-围栏距离
+        for (int k : K) {
+            GRBLinExpr expr = new GRBLinExpr();
+            String constrName = String.format("distance_k%d", k);
+
+            for (int i : V) {
+                for (int j : V) {
+                    if (i == j) continue;
+                    String zName = String.format("Z_%d_%d_%d", i, j, k); // 注意Z变量名格式：Z_起点_终点_载具
+                    GRBVar zVar = varMap.get(zName);
+                    if (zVar == null) continue;
+                    // 计算路径i→j的距离（千米）
+                    double dist = 0.0;
+                    if (M.contains(i) && N.contains(j)) {
+                        // 仓库i → 围栏j(仓库使用的hashmap存的是1开始的围栏编号)
+                        int depotIdx = -i - 1;
+                        int fenceIdx = j;
+                        HashMap<Integer, Double> distMap = depotToFenceDist.get(depotIdx);
+                        dist = distMap.get(fenceIdx); // 千米
+                    } else if (N.contains(i) && M.contains(j)) {
+                        // 围栏i → 仓库j
+                        int fenceIdx = i;
+                        int depotIdx = -j - 1;
+                        HashMap<Integer, Double> distMap = depotToFenceDist.get(depotIdx);
+                        dist = distMap.get(fenceIdx);
+                    } else if (N.contains(i) && N.contains(j)) {
+                        // 围栏i → 围栏j（围栏存的List（List）是从0开始的索引）
+                        int fenceI = i - 1;
+                        int fenceJ = j - 1;
+                        dist = fenceToFenceDist.get(fenceI).get(fenceJ);
+                    }
+                    expr.addTerm(dist, zVar);
+                }
+            }
+            // 约束：总行驶距离 ≤ 载具最大距离
+            GRBConstr constr = model.addConstr(expr, GRB.LESS_EQUAL, Constants.MAX_DISTANCE, constrName);
+            constrMap.put(constrName, constr);
+        }
+    }
+
+
+    /**
+     * 13. 载具访问次数约束
+     * 逻辑：载具k的访问围栏数 ≤ 最大访问围栏数
+     */
+    private void addVehicleVisitNumConstraints() throws GRBException {
+        for (int k : K) {
+            GRBLinExpr expr = new GRBLinExpr();
+            String constrName = String.format("visitNum_k%d", k);
+
+            for (int i : V) {
+                for (int j : V) {
+                    if (i == j) continue;
+                    String zName = String.format("Z_%d_%d_%d", i, j, k); // 注意Z变量名格式：Z_起点_终点_载具
+                    GRBVar zVar = varMap.get(zName);
+                    if (zVar == null) continue;
+                    expr.addTerm(1.0, zVar);
+                }
+            }
+            // 约束：总访问围栏数 ≤ 载具最大围栏数
+            GRBConstr constr = model.addConstr(expr, GRB.LESS_EQUAL, Constants.MAX_VISIT_NUM, constrName);
             constrMap.put(constrName, constr);
         }
     }
@@ -910,7 +988,7 @@ public class GurobiSolve {
                     if (M.contains(i) && N.contains(j)) {
                         // 1. 仓库i → 围栏j：
                         int depotIdx = -i - 1;
-                        int fenceIdx = j - 1;
+                        int fenceIdx = j;
 
                         // 校验仓库索引
                         if (depotIdx < 0 || depotIdx >= numDepots) {
@@ -936,7 +1014,7 @@ public class GurobiSolve {
 
                     } else if (N.contains(i) && M.contains(j)) {
                         // 2. 围栏i → 仓库j：
-                        int fenceIdx = i - 1;
+                        int fenceIdx = i;
                         int depotIdx = -j - 1;
 
                         // 校验仓库索引

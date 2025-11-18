@@ -30,7 +30,9 @@ public class ResultProcess {
     public void showOrderDetail() {
         System.out.println("\n【订单路径径详情】");
         System.out.println("========================================");
-
+        if(orders.getOrderList().isEmpty()){
+            return;
+        }
         for (Order order : orders.getOrderList()) {
             System.out.printf("订单ID：%d（所属仓库：%d）%n", order.getOrderId(), order.getDepot());
             System.out.println("----------------------------------------");
