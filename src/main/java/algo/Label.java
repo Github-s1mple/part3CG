@@ -23,7 +23,6 @@ public class Label {
     // 辅助字段（路径回溯）
     private List<Integer> fenceIndexList;     // 路径节点列表
 
-
     // 私有构造方法（仅由 generate 调用）
     private Label(boolean isForward, Integer curFence, Label parent, BitSet tabu,
                   double loadedQuantity, double travelDistance, int visitNum, Integer startDepotIdx) {

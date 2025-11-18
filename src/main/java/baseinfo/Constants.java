@@ -3,11 +3,11 @@ package baseinfo;
 public class Constants {
     // 模型参数
     public static final Integer MAX_VISIT_NUM = 8; //必须设置为偶数
-    public static final Double MAX_DISTANCE = 3.0;
-    public static final Double DELIVER_COST_PER_METER = 0.00005;
-    public static final Double MAX_CAPACITY = 14.0;
+    public static final Double MAX_DISTANCE = 3.0; //千米
+    public static final Double DELIVER_COST_PER_METER = 0.0005;
+    public static final Double MAX_CAPACITY = 16.0;
     public static final Double MIN_CARRIER_LOAD = 5.0;
-    public static final double DISTANCE_TO_NEAREST_FENCE = 0.1; //围栏初始价值定义方式：与最近仓库的距离 * 系数
+    public static final double DISTANCE_TO_NEAREST_FENCE = 1; //围栏初始价值定义方式：与最近仓库的距离 * 系数
 
     // 规则参数
     public static final Double OBJ_LB = 0.0;
@@ -27,8 +27,8 @@ public class Constants {
 
     // 算法控制参数
     public static final Integer MAX_RLMP_COLUMNS = 100000;
-    public static final Integer ITERATION_TIME_LIMIT = 900;
-    public static final Double DUAL_MULTIPLIER = 1.0; //对偶值调参
+    public static final Integer ITERATION_TIME_LIMIT = 160; // 列生成算法的求解时间（baseline不适用）
+    public static final Double DUAL_MULTIPLIER = 1.0; //对偶值额外调参（标准值是1）
     public static final Integer OUTPUT_INTERVAL = 100;
     public static final Integer ITERATION_COLUMN_NUM = 1000;
 }

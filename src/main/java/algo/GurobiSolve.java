@@ -966,14 +966,6 @@ public class GurobiSolve {
         List<HashMap<Integer, Double>> depotToFenceDist = instance.getDepotDistanceMatrix();
         List<List<Double>> fenceToFenceDist = instance.getDistanceMatrix();
 
-        if (depotToFenceDist == null || depotToFenceDist.isEmpty()) {
-            System.err.println("警告：depotToFenceDist为空，仓库到围栏的距离按0处理");
-            return 0;
-        }
-        if (fenceToFenceDist == null || fenceToFenceDist.isEmpty()) {
-            System.err.println("警告：fenceToFenceDist为空，围栏到围栏的距离按0处理");
-        }
-
         for (int i : V) {
             for (int j : V) {
                 if (i == j) continue;
@@ -1009,7 +1001,7 @@ public class GurobiSolve {
                             throw new IndexOutOfBoundsException("仓库" + depotIdx + "到围栏" + fenceIdx + "的距离不存在（数组长度：" + distArray.size() + "）");
                         }
 
-                        // 距离（千米转米）
+                        // 距离
                         dist = distArray.get(fenceIdx) * 1000;
 
                     } else if (N.contains(i) && M.contains(j)) {
@@ -1031,7 +1023,7 @@ public class GurobiSolve {
                             throw new IndexOutOfBoundsException("围栏索引无效：" + fenceIdx + "（数组长度：" + distArray.size() + "）");
                         }
 
-                        // 距离（千米转米）
+                        // 距离（米）
                         dist = distArray.get(fenceIdx) * 1000;
 
                     } else if (N.contains(i) && N.contains(j)) {
@@ -1050,7 +1042,7 @@ public class GurobiSolve {
                             throw new IndexOutOfBoundsException("围栏" + fenceI + "到" + fenceJ + "的距离不存在");
                         }
 
-                        dist = distList.get(fenceJ) * 1000; // 千米转米
+                        dist = distList.get(fenceJ) * 1000; // 米
                     }
 
                     totalDist += dist;

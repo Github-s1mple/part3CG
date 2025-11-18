@@ -1,29 +1,39 @@
 package algo;
 
 import java.util.Comparator;
+import java.util.Map;
 
 /**
- * 标签优先级比较器：用于 PriorityQueue 排序，决定标签扩展的优先顺序
- * 核心逻辑：优先扩展"潜力更高"的标签（距离更短、卸货量更合理的标签）
+ * 标签优先级比较器：仓库平衡权重远高于其他标准
+ * 核心逻辑：先按仓库标签数量差异划分优先级，差距越大，数量少的仓库优先级越高；
+ * 仅当仓库平衡程度接近时，才用距离和负载微调。
  */
 public class LabelComparator implements Comparator<Label> {
+    private final Map<Integer, Integer> depotExpandCount;
 
-    /**
-     * 比较两个标签的优先级
-     * @param o1 标签1
-     * @param o2 标签2
-     * @return 排序结果：负数表示 o1 优先级高于 o2（o1 应先扩展），正数则相反
-     */
+    public LabelComparator(Map<Integer, Integer> depotExpandCount) {
+        this.depotExpandCount = depotExpandCount;
+    }
+
     @Override
     public int compare(Label o1, Label o2) {
-        // 核心排序逻辑：按"距离越短优先级越高"排序（优先扩展短路径标签）
-        // 若距离相同，按"卸货量越大优先级越高"排序（优先扩展负载更合理的标签）
-        if (o1.getTravelDistance() != o2.getTravelDistance()) {
-            // 距离短的标签优先（升序排列）
-            return Double.compare(o1.getTravelDistance(), o2.getTravelDistance());
+        Integer depot1 = o1.getStartDepotIdx();
+        Integer depot2 = o2.getStartDepotIdx();
+
+        int count1 = depotExpandCount.getOrDefault(depot1, 0);
+        int count2 = depotExpandCount.getOrDefault(depot2, 0);
+
+        // 核心修正：次数少的仓库，返回-1（优先级更高）
+        if (count1 < count2) {
+            System.out.println("比较：仓库" + depot1 + "(" + count1 + "次) < 仓库" + depot2 + "(" + count2 + "次) → " + depot1 + "优先");
+            return -1;
+        } else if (count1 > count2) {
+            System.out.println("比较：仓库" + depot1 + "(" + count1 + "次) > 仓库" + depot2 + "(" + count2 + "次) → " + depot2 + "优先");
+            return 1; // 次数多的返回1，优先级更低
         } else {
-            // 距离相同则卸货量大的优先（降序排列）
-            return Double.compare(o2.getLoadedQuantity(), o1.getLoadedQuantity());
+            // 次数相等时，保留原距离逻辑（可选）
+            System.out.println("比较：仓库" + depot1 + "与" + depot2 + "次数相等，按距离排序");
+            return Double.compare(o1.getTravelDistance(), o2.getTravelDistance());
         }
     }
 }
