@@ -80,7 +80,7 @@ public class OrderColumnGeneration {
         // 1. 围栏容量约束（保留不变）
         for (Fence fence : fences.getFenceList()) {
             String constName = fence.getConstName();
-            GRBLinExpr emptyExpr = new GRBLinExpr(); // 空表达式（无变量）
+            GRBLinExpr emptyExpr = new GRBLinExpr();
             GRBConstr constr = RLMPSolver.addConstr(
                     emptyExpr, GRB.LESS_EQUAL, fence.getDeliverDemand(), constName
             );
@@ -130,7 +130,7 @@ public class OrderColumnGeneration {
         List<Order> allOrders = new ArrayList<>();
 
         // 总时间限制
-        int totalTimeLimit = Constants.ITERATION_TIME_LIMIT;
+        int totalTimeLimit = (int) (Constants.ITERATION_TIME_LIMIT * (1 - Constants.RMPSOLVE_PROPORTION));
 
         // 循环条件：剩余时间>0 且 未超过最大列数
         while (true) {

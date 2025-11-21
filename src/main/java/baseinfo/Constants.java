@@ -26,9 +26,10 @@ public class Constants {
     public static final String candidatePointsTestFilePath = "candidate_points_test.xlsx";
 
     // 算法控制参数
-    public static final Integer MAX_RLMP_COLUMNS = 100000;
-    public static final Integer ITERATION_TIME_LIMIT = 160; // 列生成算法的求解时间（baseline不适用）
+    public static final Integer MAX_RLMP_COLUMNS = 300000;
+    public static final Integer ITERATION_TIME_LIMIT = 160; // 列生成算法的总时间（baseline不适用）
+    public static final Double RMPSOLVE_PROPORTION = 0.3; // RMP求解时间占比
     public static final Double DUAL_MULTIPLIER = 1.0; //对偶值额外调参（标准值是1）
-    public static final Integer OUTPUT_INTERVAL = 100;
-    public static final Integer ITERATION_COLUMN_NUM = 1000;
+    public static final Integer OUTPUT_INTERVAL = 1000;
+    public static final Integer ITERATION_COLUMN_NUM = 100; //每轮生成的列数（对偶值更新频率）
 }

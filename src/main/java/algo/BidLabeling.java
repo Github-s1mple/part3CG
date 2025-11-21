@@ -20,7 +20,7 @@ public class BidLabeling {
     // 算例核心数据
     final Fences fences;
     final Carriers carriers;
-    final Depots depots; // 多仓库管理类（原代码已引用，确保字段存在）
+    final Depots depots;
 
     // 算法控制参数
     private Integer timeLimit;
@@ -35,17 +35,19 @@ public class BidLabeling {
 
     // 标签容器
     final List<List<Label>> labelPool; // 按【节点索引】存储标签（多节点多标签）
-    final PriorityQueue<Label> forwardLabelQueue;  // 前向标签优先级队列（多起点统一调度）
-    final PriorityQueue<Label> backwardLabelQueue; // 后向标签优先级队列（多起点统一调度）
-    final List<Label> forwardLabelPool;  // 前向标签待拼接池（虚拟节点触发后存入）
-    final List<Label> backwardLabelPool; // 后向标签待拼接池（虚拟节点触发后存入）
-    private HashMap<Integer, Integer> labelDepotRecorder = new HashMap<>();
-    private final Map<Integer, Integer> depotExpandCount = new HashMap<>();
+
+
+    // 仓库队列
+    private List<Integer> allDepotIndexes;
+    private Map<Integer, Queue<Label>> depotForwardQueues;
+    private Map<Integer, Queue<Label>> depotBackwardQueues;
+    private Map<Integer, Integer> depotExpandCount;
+    private Map<Integer, Integer> depotOrderCount;
 
     // 结果容器与辅助组件
     private List<Order> orderPool = new ArrayList<>(); // 最终订单池
-    private final List<Carrier> carrierList;           // 车型列表（原代码已引用）
-    private final LoadingAlgorithm loadingAlgorithm;   // 装卸方案求解器（原代码已引用）
+    private final List<Carrier> carrierList;           // 车型列表
+    private final LoadingAlgorithm loadingAlgorithm;   // 装卸方案求解器
     private final double dual_multiplier;
     private HashMap<String, Double> dualsOfRLMP; // 当前对偶信息
 
@@ -71,19 +73,39 @@ public class BidLabeling {
             this.labelPool.add(new ArrayList<>()); // 每个节点对应一个标签列表
         }
 
-        // 3. 初始化标签队列（优先级队列：按自定义规则排序，优先扩展优质标签）
-        this.forwardLabelQueue = new PriorityQueue<>(new LabelComparator(depotExpandCount));
-        this.backwardLabelQueue = new PriorityQueue<>(new LabelComparator(depotExpandCount));
-        // 4. 初始化标签待拼接池（虚拟节点触发后存储待拼接标签）
-        this.forwardLabelPool = new ArrayList<>();
-        this.backwardLabelPool = new ArrayList<>();
+        // 3. 动态初始化仓库相关容器（核心适配逻辑）
+        initDepotQueues();
 
         // 5. 调用初始化方法
         this.initialize();
         System.out.println("算法初始化完成！");
     }
 
-    /* 初始化与预处理：仅保留通用逻辑（虚拟节点、异构距离计算），多起点标签初始化移至专用方法 */
+
+    /**
+     * 动态初始化仓库队列（适配任意数量仓库）
+     */
+    private void initDepotQueues() {
+        // 从Depots获取所有仓库索引（自动适配1/N个仓库）
+        this.allDepotIndexes = new ArrayList<>(depots.getDepotIndexes());
+        if (allDepotIndexes.isEmpty()) {
+            throw new IllegalArgumentException("Depots中未配置任何仓库，无法初始化队列");
+        }
+
+        // 初始化仓库→队列映射（每个仓库分配独立队列）
+        this.depotForwardQueues = new HashMap<>(allDepotIndexes.size());
+        this.depotBackwardQueues = new HashMap<>(allDepotIndexes.size());
+        this.depotExpandCount = new HashMap<>(allDepotIndexes.size());
+        this.depotOrderCount = new HashMap<>(allDepotIndexes.size());
+        for (Integer depotIdx : allDepotIndexes) {
+            depotForwardQueues.put(depotIdx, new LinkedList<>()); // 前向队列
+            depotBackwardQueues.put(depotIdx, new LinkedList<>()); // 后向队列
+            depotExpandCount.put(depotIdx, 0); // 初始化扩展次数为0
+            depotOrderCount.put(depotIdx, 0); // 初始化扩展次数为0
+        }
+    }
+
+    /* 初始化与预处理 */
     private void initialize() {
         for (Integer i : fences.getFenceIndexList()) {
             Fence fenceI = fences.getFence(i);
@@ -130,18 +152,6 @@ public class BidLabeling {
         return generateOutputOrders();
     }
 
-    /* 输出信息函数 */
-    private void displayIterationInformation(Integer iterationCnt) {
-        double obj = (double) Math.round(this.bestObj * 10) / 10;
-        double timeRecord = (double) Math.round(this.timeRecord * 10) / 10;
-        double timeCost = (double) Math.round((double) (CommonUtils.currentTimeInSecond() - this.startTime) * 10) / 10;
-        System.out.println("iterationCnt: " + iterationCnt + ", forwardPoolSize: " + this.forwardLabelPool.size()
-                + ", backwardPoolSize: " + this.backwardLabelPool.size()
-                + ", forwardQueueSize: " + this.forwardLabelQueue.size()
-                + ", backwardQueueSize: " + this.backwardLabelQueue.size()
-                + ", orderPoolSize: " + this.orderPool.size()
-                + ", obj: " + obj + ", timeRecord: " + timeRecord + "(" + timeCost + ")");
-    }
 
     public void displayRecordDict() {
         System.out.println("recordDict:");
@@ -177,60 +187,115 @@ public class BidLabeling {
     /* 双向标号搜索 - 适配多真实起点仓库+全卸点（强制返回起点仓库） */
     private void bidirectionalSearch() {
         int iterationCnt = 0;
-        // 初始化：通过Depots类获取所有仓库，创建前向/后向标签
         initializeMultiDepotUnloadingLabels();
+        this.startTime = CommonUtils.currentTimeInSecond();
+        this.bestObj = 0.0;
 
         while (true) {
-            // 前向标号搜索（统一队列，按潜力调度）
-            if (!forwardLabelQueue.isEmpty()) {
-                Label label = forwardLabelQueue.poll();
-                this.labelExpand(label);
-            }
-            // 后向标号搜索（统一队列）
-            if (!backwardLabelQueue.isEmpty()) {
-                Label label = backwardLabelQueue.poll();
-                this.labelExpand(label);
+            // 1. 选择当前扩展次数最少的仓库（核心公平逻辑）
+            Integer targetDepot = selectTargetDepot();
+            if (targetDepot == null) {
+                // 所有仓库队列都为空，退出
+                break;
             }
 
-            // 完整结束条件: 前后向队列均为空
-            if (forwardLabelQueue.isEmpty() && backwardLabelQueue.isEmpty()) {
-                displayIterationInformationIfNecessary(iterationCnt);
-                break;
+            // 2. 扩展目标仓库的前向队列
+            Queue<Label> forwardQueue = depotForwardQueues.get(targetDepot);
+            if (forwardQueue != null && !forwardQueue.isEmpty()) {
+                Label label = forwardQueue.poll();
+                this.labelExpand(label);
+                logExpand(label);
             }
-            // 提前结束条件：超时或达到订单数量上限
-            if (CommonUtils.currentTimeInSecond() - this.startTime > this.timeLimit
+
+            // 3. 扩展目标仓库的后向队列
+            Queue<Label> backwardQueue = depotBackwardQueues.get(targetDepot);
+            if (backwardQueue != null && !backwardQueue.isEmpty()) {
+                Label label = backwardQueue.poll();
+                this.labelExpand(label);
+                logExpand(label);
+            }
+
+            // 4. 结束条件
+            if (isAllQueuesEmpty()
+                    || CommonUtils.currentTimeInSecond() - this.startTime > this.timeLimit
                     || this.orderPool.size() >= this.orderLimit) {
-                displayIterationInformationIfNecessary(iterationCnt);
                 break;
             }
-            // 定期输出迭代信息
-            iterationCnt += 1;
-            if (iterationCnt % 100 == 0) {
-                System.out.println("刷新队列！当前迭代次数：" + iterationCnt);
-                refreshQueues(); // 刷新前后向队列
-            }
-            if (iterationCnt % Constants.OUTPUT_INTERVAL == 0) {
-                displayIterationInformationIfNecessary(iterationCnt);
+
+            iterationCnt++;
+            if (outputFlag && iterationCnt % Constants.OUTPUT_INTERVAL == 0) {
+                System.out.println("累计扩展次数：" + depotExpandCount);
             }
         }
     }
 
-    // 刷新队列：重新入队所有标签，强制更新优先级
-    private void refreshQueues() {
-        // 刷新前向队列
-        List<Label> forwardTemp = new ArrayList<>(forwardLabelQueue);
-        forwardLabelQueue.clear();
-        forwardLabelQueue.addAll(forwardTemp);
+    /**
+     * 选择当前扩展次数最少的仓库（适配任意数量，保证公平）
+     */
+    private Integer selectTargetDepot() {
+        Integer targetDepot = null;
+        int minExpandCount = Integer.MAX_VALUE;
 
-        // 刷新后向队列
-        List<Label> backwardTemp = new ArrayList<>(backwardLabelQueue);
-        backwardLabelQueue.clear();
-        backwardLabelQueue.addAll(backwardTemp);
+        // 遍历所有仓库，找到扩展次数最少的
+        for (Integer depotIdx : allDepotIndexes) {
+            int count = depotExpandCount.get(depotIdx);
+            // 优先选择次数最少的；次数相同时，按索引顺序选择（避免随机）
+            if (count < minExpandCount) {
+                minExpandCount = count;
+                targetDepot = depotIdx;
+            }
+        }
+
+        // 兜底：若目标仓库队列全空，切换到下一个有标签的仓库
+        if (targetDepot != null && isDepotQueuesEmpty(targetDepot)) {
+            for (int i = 0; i < allDepotIndexes.size(); i++) {
+                int nextIdx = (allDepotIndexes.indexOf(targetDepot) + 1) % allDepotIndexes.size();
+                Integer nextDepot = allDepotIndexes.get(nextIdx);
+                if (!isDepotQueuesEmpty(nextDepot)) {
+                    targetDepot = nextDepot;
+                    break;
+                }
+            }
+        }
+
+        return targetDepot;
     }
+
+    /**
+     * 检查某个仓库的前后向队列是否都为空
+     */
+    private boolean isDepotQueuesEmpty(Integer depotIdx) {
+        Queue<Label> forwardQueue = depotForwardQueues.get(depotIdx);
+        Queue<Label> backwardQueue = depotBackwardQueues.get(depotIdx);
+        return (forwardQueue == null || forwardQueue.isEmpty())
+                && (backwardQueue == null || backwardQueue.isEmpty());
+    }
+
+    /**
+     * 检查所有仓库的队列是否都为空
+     */
+    private boolean isAllQueuesEmpty() {
+        for (Integer depotIdx : allDepotIndexes) {
+            if (!isDepotQueuesEmpty(depotIdx)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 扩展日志（统计累计次数）
+     */
+    private void logExpand(Label label) {
+        Integer depotIdx = label.getStartDepotIdx();
+        depotExpandCount.put(depotIdx, depotExpandCount.get(depotIdx) + 1);
+    }
+
 
     // 基于Depots类初始化多仓库标签（强制起点=终点）
     private void initializeMultiDepotUnloadingLabels() {
-        for (Integer depotIdx : depots.getDepotIndexes()) {
+        // 遍历所有仓库，为每个仓库创建初始标签（适配任意数量）
+        for (Integer depotIdx : allDepotIndexes) {
             // 前向初始标签
             BitSet forwardTabu = new BitSet(fences.getFenceNum());
             Label forwardInit = Label.generate(
@@ -243,7 +308,8 @@ public class BidLabeling {
                     0,
                     depotIdx
             );
-            forwardLabelQueue.add(forwardInit);
+            // 添加到对应仓库的前向队列
+            depotForwardQueues.get(depotIdx).add(forwardInit);
 
             // 后向初始标签
             BitSet backwardTabu = new BitSet(fences.getFenceNum());
@@ -257,66 +323,82 @@ public class BidLabeling {
                     0,
                     depotIdx
             );
-            backwardLabelQueue.add(backwardInit);
+            // 添加到对应仓库的后向队列
+            depotBackwardQueues.get(depotIdx).add(backwardInit);
         }
     }
 
-    // 标签扩展
+    // 标签扩展（适配新的仓库专属队列逻辑）
     private void labelExpand(Label label) {
         Fence currentFence;
-        if (label.getParent() == null || label.getCurFence() == 0){
+        if (label.getParent() == null || label.getCurFence() == 0) {
+            // 初始标签：从仓库创建999虚拟节点（截断搜索用）
             Depot depot = depots.getDepot(label.getStartDepotIdx());
-            currentFence = depot.depot2Fence(999);//创建一个999节点用于截断搜索
+            currentFence = depot.depot2Fence(999);
         } else {
+            // 非初始标签：获取当前节点对应的围栏
             currentFence = fences.getFence(label.getCurFence());
         }
+
         boolean isForward = label.isForward();
-        Integer startDepotIdx = label.getStartDepotIdx();
-        depotExpandCount.put(startDepotIdx, depotExpandCount.getOrDefault(startDepotIdx, 0) + 1);
-        System.out.println("扩展仓库：" + startDepotIdx + "，当前计数：" + depotExpandCount);
+
+        // 遍历当前节点的所有有效后续节点
         for (Integer nextNode : currentFence.getVaildArcFence()) {
-            // 如果是自己或者是禁止搜索的则跳过
+            // 跳过禁忌节点（自身或已访问节点）
             if (label.getTabu().get(nextNode)) {
                 continue;
             }
-            // 如果是999节点（目的是截断搜索），则判断是否能成单，并压入待匹配池
+
+            // 处理999虚拟节点（截断搜索，尝试连接前后向标签）
             if (nextNode == 999 && label.getLoadedQuantity() >= Constants.MIN_CARRIER_LOAD) {
+                // 连接逻辑：无需依赖旧的 forwardLabelPool/backwardLabelPool，直接从标签池全局搜索
                 if (isForward) {
-                    for (Label labelI : this.backwardLabelPool) {
-                        this.labelConnect(label, labelI);
+                    // 前向标签：遍历所有后向标签尝试连接
+                    for (List<Label> nodeLabels : labelPool) {
+                        for (Label backwardLabel : nodeLabels) {
+                            if (!backwardLabel.isForward()) { // 确保是后向标签
+                                this.labelConnect(label, backwardLabel);
+                            }
+                        }
                     }
-                    this.forwardLabelPool.add(label);
                 } else {
-                    for (Label labelI : this.forwardLabelPool) {
-                        this.labelConnect(labelI, label);
+                    // 后向标签：遍历所有前向标签尝试连接
+                    for (List<Label> nodeLabels : labelPool) {
+                        for (Label forwardLabel : nodeLabels) {
+                            if (forwardLabel.isForward()) { // 确保是前向标签
+                                this.labelConnect(forwardLabel, label);
+                            }
+                        }
                     }
-                    this.backwardLabelPool.add(label);
                 }
-            } else if (nextNode != 999) {
+            }
+            // 处理非虚拟节点（生成新标签并加入对应仓库的队列）
+            else if (nextNode != 999) {
                 Fence nextFence = fences.getFence(nextNode);
 
-                // 访问次数约束（仅卸货点计数，归属仓库不计入）
+                // 访问次数约束（仅卸货点计数，避免超过上限）
                 int newVisitNum = label.getVisitNum() + 1;
                 if (newVisitNum > Constants.MAX_VISIT_NUM / 2) {
                     continue;
                 }
 
-                // 卸货量约束（仅卸货点累加，归属仓库不计入）
+                // 卸货量约束（累计卸货量不超过最大容量的一半）
                 double newLoad = label.getLoadedQuantity() + nextFence.getDeliverDemand();
                 if (newLoad > Constants.MAX_CAPACITY / 2.0) {
                     continue;
                 }
 
-                // 距离约束（含归属仓库的距离计算）
+                // 距离约束（累计距离不超过最大距离的一半）
                 double distance_ = currentFence.getDistance(nextNode) + label.getTravelDistance();
                 if (distance_ > Constants.MAX_DISTANCE / 2.0) {
                     continue;
                 }
 
-                // 创建新标签（更新禁忌表）
+                // 复制禁忌表并标记当前节点为已访问
                 BitSet tabu_ = (BitSet) label.getTabu().clone();
                 tabu_.set(nextNode, true);
 
+                // 生成新标签（继承原标签的仓库索引）
                 Label newLabel = Label.generate(
                         isForward,
                         nextFence.getIndex(),
@@ -325,8 +407,10 @@ public class BidLabeling {
                         newLoad,
                         distance_,
                         newVisitNum,
-                        label.getStartDepotIdx()
+                        label.getStartDepotIdx() // 关键：新标签继承原标签的仓库索引
                 );
+
+                // 调用 dominantAdd 加入标签池和对应仓库的队列（新逻辑兼容）
                 this.dominantAdd(newLabel, nextNode);
             }
         }
@@ -335,22 +419,38 @@ public class BidLabeling {
 
     private void dominantAdd(Label label, Integer fenceIdx) {
         boolean isForward = label.isForward();
+        Integer depotIdx = label.getStartDepotIdx();
+
+        // 1. 原有支配性检查（保持不变，筛选优质标签）
+        boolean canAdd = true;
         int li = 0;
         while (li < this.labelPool.get(fenceIdx - 1).size()) {
             Label labelI = this.labelPool.get(fenceIdx - 1).get(li);
             if (this.dominantRule(label, labelI) == 1) {
                 this.labelPool.get(fenceIdx - 1).remove(li);
             } else if (this.dominantRule(label, labelI) == -1) {
-                return;
+                canAdd = false;
+                break;
             } else {
                 li++;
             }
         }
-        this.labelPool.get(fenceIdx - 1).add(label);
-        if (isForward) {
-            forwardLabelQueue.add(label);
-        } else {
-            backwardLabelQueue.add(label);
+
+        // 2. 动态分配到对应仓库的队列（适配任意仓库）
+        if (canAdd) {
+            this.labelPool.get(fenceIdx - 1).add(label);
+            // 按仓库索引获取对应队列，添加标签
+            if (isForward) {
+                Queue<Label> forwardQueue = depotForwardQueues.get(depotIdx);
+                if (forwardQueue != null) {
+                    forwardQueue.add(label);
+                }
+            } else {
+                Queue<Label> backwardQueue = depotBackwardQueues.get(depotIdx);
+                if (backwardQueue != null) {
+                    backwardQueue.add(label);
+                }
+            }
         }
     }
 
@@ -471,6 +571,8 @@ public class BidLabeling {
         if (sameNodeSetOrder != null) {
             this.orderPool.remove(sameNodeSetOrder); // 去除路径被支配的工单
         }
+        Integer depotIdx = order.getDepot();
+        depotOrderCount.put(depotIdx, depotExpandCount.get(depotIdx) + 1);
         this.visited2order.put(route.getRouteVitedString(), order);
         this.orderPool.add(order);
         this.bestObj = Math.max(this.bestObj, order.getOriginalPrice());
@@ -495,11 +597,5 @@ public class BidLabeling {
         List<Order> orders = orderPool.subList(0, min(orderLimit, orderPool.size()));
         orderPool = orderPool.subList(min(orderLimit, orderPool.size()), orderPool.size());
         return orders;
-    }
-
-    public void displayIterationInformationIfNecessary(int iterationCnt) {
-        if (this.outputFlag) {
-            this.displayIterationInformation(iterationCnt);
-        }
     }
 }

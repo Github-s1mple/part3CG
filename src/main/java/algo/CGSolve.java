@@ -1,6 +1,7 @@
 package algo;
 
 import Utils.ResultProcess;
+import baseinfo.Constants;
 import impl.Instance;
 import impl.Order;
 
@@ -14,10 +15,9 @@ public class CGSolve {
             OrderColumnGeneration cg = new OrderColumnGeneration(instance);
             //cg.setOutputFlag(true);
             List<Order> allColumns = cg.solve(); // 生成的所有列
-            ResultProcess resultProcess = new ResultProcess(allColumns);
-            resultProcess.showOrderStructure();
             // 2. 调用最终主问题求解器
             RLMPSolve finalSolver = new RLMPSolve(allColumns, instance);
+            finalSolver.setTimeLimit((int) (Constants.ITERATION_TIME_LIMIT * Constants.RMPSOLVE_PROPORTION));
             // 最优订单组合
             return finalSolver.solveRLMP();
 

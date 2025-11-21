@@ -8,6 +8,8 @@ import com.gurobi.gurobi.GRBException;
 import com.gurobi.gurobi.GRBLinExpr;
 import com.gurobi.gurobi.GRBModel;
 import com.gurobi.gurobi.GRBVar;
+import lombok.Setter;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -21,11 +23,12 @@ public class RLMPSolve {
     private final Fences fences;
     private GRBEnv env;
     private GRBModel finalModel;
+    @Setter
+    private int timeLimit = 600; // 默认10分钟
 
-    // 输出结果：最优订单、总收益、约束对偶值
+    // 输出结果：最优订单、总收益
     private List<Order> optimalOrders;
     private double totalProfit;
-    private HashMap<String, Double> finalDuals;
 
     // 预缓存避免重复查询
     private Map<String, Order> idToOrderMap; // 订单ID→Order对象
@@ -37,7 +40,6 @@ public class RLMPSolve {
         this.instance = instance;
         this.fences = instance.getFences();
         this.optimalOrders = new ArrayList<>();
-        this.finalDuals = new HashMap<>();
 
         initPreCache();
     }
@@ -110,6 +112,8 @@ public class RLMPSolve {
         finalModel.set(GRB.IntParam.Presolve, 2); // 启用强预处理
         finalModel.set(GRB.StringAttr.ModelName, "Final_RLMP");
 
+        finalModel.set(GRB.DoubleParam.TimeLimit, timeLimit);
+        finalModel.set(GRB.DoubleParam.MIPGap, 0.01);
         // 设置目标函数为最大化
         finalModel.set(GRB.IntAttr.ModelSense, GRB.MAXIMIZE);
     }
@@ -202,10 +206,10 @@ public class RLMPSolve {
      * 求解最终模型
      */
     private void optimizeModel() throws GRBException {
-        System.out.println("\n开始求解最终主问题...");
+        System.out.println("\n开始求解最终主问题（时间限制：" + timeLimit + "秒）...");
         finalModel.optimize();
 
-        // 检查求解状态
+        // 检查求解状态（重点处理时间限制）
         int status = finalModel.get(GRB.IntAttr.Status);
         switch (status) {
             case GRB.Status.OPTIMAL:
@@ -214,20 +218,25 @@ public class RLMPSolve {
             case GRB.Status.SUBOPTIMAL:
                 System.out.println("求解状态：找到次优解（可能因时间限制）");
                 break;
+            case GRB.Status.TIME_LIMIT:
+                System.out.println("求解状态：达到时间限制，返回当前最佳解");
+                break;
+            case GRB.Status.INFEASIBLE:
+                throw new GRBException("模型不可行", status);
             default:
                 throw new GRBException("最终主问题求解失败，状态码：" + status, status);
         }
     }
 
     /**
-     * 解析求解结果（优化findOrderById查询）
+     * 解析求解结果
      */
     private void parseResult() throws GRBException {
         // 1. 解析总收益
         totalProfit = finalModel.get(GRB.DoubleAttr.ObjVal);
         System.out.println("\n===== 最终主问题求解结果 =====");
         System.out.println("总收益：" + String.format("%.2f", totalProfit));
-        System.out.println("订单总数：" + finalColumns.size());
+        System.out.println("总列数：" + finalColumns.size());
 
         // 2. 解析最优订单（变量值>1e-6视为选中）
         double epsilon = 1e-6;
@@ -237,14 +246,13 @@ public class RLMPSolve {
             double varValue = var.get(GRB.DoubleAttr.X);
 
             if (varValue > epsilon) {
-                Order order = idToOrderMap.get(orderId); // 替换原findOrderById，O(1)查询
+                Order order = idToOrderMap.get(orderId);
                 if (order != null) {
                     optimalOrders.add(order);
-                    System.out.println("订单ID：" + orderId + "，选择比例：" + String.format("%.4f", varValue) + "，收益：" + order.getOriginalPrice());
                 }
             }
         }
-        System.out.println("选中的最优订单数：" + optimalOrders.size());
+        System.out.println("选中的最优路径数：" + optimalOrders.size());
         // 4. 验证约束满足情况
         // verifyConstraints();
     }

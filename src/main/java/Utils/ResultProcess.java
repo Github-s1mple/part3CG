@@ -8,7 +8,6 @@ import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 public class ResultProcess {
     private final Orders orders;
@@ -28,16 +27,15 @@ public class ResultProcess {
     }
 
     public void showOrderDetail() {
-        System.out.println("\n【订单路径径详情】");
+        System.out.println("\n【路径详情】");
         System.out.println("========================================");
         if(orders.getOrderList().isEmpty()){
             return;
         }
         for (Order order : orders.getOrderList()) {
-            System.out.printf("订单ID：%d（所属仓库：%d）%n", order.getOrderId(), order.getDepot());
-            System.out.println("----------------------------------------");
-            System.out.printf("总路径距离：%s 米%n", df.format(order.getDistance()));
-            System.out.println("详细路径（含装载量）：");
+            System.out.printf("路径所属仓库：%d%n", order.getDepot());
+            System.out.printf("总路径距离：%s 千米%n", df.format(order.getDistance()));
+            System.out.println("详细路径：");
 
             // 获取围栏顺序列表和装载量映射
             ArrayList<Integer> fenceList = order.getFenceList();
@@ -67,7 +65,7 @@ public class ResultProcess {
         }
     }
 
-    public void showOrderStructure(){
+    public void showOrderCarrierStructure(){
         for (Order order : orderList){
             Carrier carrier = order.getCarrier();
             if (carrierNum.containsKey(carrier.getIndex())){
