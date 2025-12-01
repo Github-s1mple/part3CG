@@ -1,4 +1,4 @@
-package algo;
+package algoCG;
 
 import impl.*;
 import com.gurobi.gurobi.GRB;

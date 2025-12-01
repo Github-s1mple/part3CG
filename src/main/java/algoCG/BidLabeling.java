@@ -1,4 +1,4 @@
-package algo;
+package algoCG;
 
 import Utils.CommonUtils;
 import Utils.ConstraintsManager;
@@ -78,7 +78,6 @@ public class BidLabeling {
 
         // 5. 调用初始化方法
         this.initialize();
-        System.out.println("算法初始化完成！");
     }
 
 

@@ -1,4 +1,4 @@
-package algo;
+package algoCG;
 
 import Utils.GurobiUtils;
 import com.gurobi.gurobi.*;
@@ -451,7 +451,7 @@ public class GurobiSolve {
                 GRBVar xVar = varMap.get(xName);
                 String constrName = String.format("load_link_i%d_k%d", i, k);
 
-                // 约束1：装载→访问（原有）：dik ≤ demand * Xik
+                // 约束1：装载→访问：dik ≤ demand * Xik
                 GRBLinExpr right1 = new GRBLinExpr();
                 right1.addTerm(demand, xVar);
                 model.addConstr(dVar, GRB.LESS_EQUAL, right1, constrName + "_load2visit");

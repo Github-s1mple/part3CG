@@ -1,6 +1,7 @@
 package Utils;
 
 import baseinfo.Constants;
+import impl.Candidate;
 import impl.Carrier;
 import impl.Depot;
 import impl.Fence;
@@ -18,9 +19,11 @@ import static baseinfo.MapDistance.calculateSphericalDistance;
 public class Initializer {
     private int fenceNum;
     private int depotNum;
+    private int candidateNum;
     private int carrierNum;
     private ArrayList<Fence> fenceList;
     private ArrayList<Depot> depotList;
+    private ArrayList<Candidate> candidateList;
     private ArrayList<Carrier> carrierList;
 
     public Initializer() {
@@ -123,7 +126,7 @@ public class Initializer {
                 depotList.add(depot);
             }
         } catch (IOException e) {
-            System.err.println("读取候选点失败：" + e.getMessage());
+            System.err.println("读取仓库失败：" + e.getMessage());
             return new ArrayList<>();
         }
         depotNum = depotList.size();
@@ -164,6 +167,46 @@ public class Initializer {
             System.out.println("成功生成载具数：" + carrierList.size());
             return carrierList;
         }
+    }
+
+    public ArrayList<Candidate> candidateInitializer(List<double[]> fenceCoordinates) {
+        System.out.println("开始初始化候选点地图...");
+        if (fenceCoordinates == null || fenceCoordinates.isEmpty()) {
+            System.err.println("围栏坐标为空，无法创建candidate");
+            return new ArrayList<>();
+        }
+
+        candidateList = new ArrayList<>();
+        try (FileInputStream fis = new FileInputStream(Objects.equals(Constants.ALGO_MODE, "CG") ? Constants.candidatePointsFilePath : Constants.candidatePointsTestFilePath);
+             Workbook workbook = WorkbookFactory.create(fis)) {
+
+            Sheet sheet = workbook.getSheetAt(0);
+            // 跳过表头行（第0行：Longitude,Latitude）
+            for (int rowNum = 1; rowNum <= sheet.getLastRowNum(); rowNum++) {
+                Row row = sheet.getRow(rowNum);
+                if (row == null) continue;
+
+                // 读取候选点经纬度：A列（索引0）=经度，B列（索引1）=纬度（兼容数字/字符串）
+                double candidateLon = getCellValueAsDouble(row.getCell(0));
+                double candidateLat = getCellValueAsDouble(row.getCell(1));
+                double candidateCost = getCellValueAsDouble(row.getCell(2));
+                // 过滤无效经纬度
+                if (Double.isNaN(candidateLon) || Double.isNaN(candidateLat) || Double.isNaN(candidateCost)) {
+                    continue;
+                }
+
+                // 创建Candidate并计算到所有围栏的距离
+                Candidate candidate = new Candidate(-rowNum, candidateLon, candidateLat, candidateCost);
+                candidate.generateDistanceMap(fenceCoordinates);
+                candidateList.add(candidate);
+            }
+        } catch (IOException e) {
+            System.err.println("读取候选点失败：" + e.getMessage());
+            return new ArrayList<>();
+        }
+        candidateNum = candidateList.size();
+        System.out.println("成功生成候选点数：" + candidateList.size());
+        return candidateList;
     }
 
     /**

@@ -1,4 +1,4 @@
-package algo;
+package algoCG;
 
 import lombok.Getter;
 import lombok.Setter;

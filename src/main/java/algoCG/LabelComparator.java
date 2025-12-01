@@ -1,4 +1,4 @@
-package algo;
+package algoCG;
 
 import java.util.Comparator;
 import java.util.Map;

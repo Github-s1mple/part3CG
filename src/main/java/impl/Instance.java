@@ -39,5 +39,4 @@ public class Instance {
         carriers.setCarrierList(carrierList);
         orderList = null;
     }
-
 }

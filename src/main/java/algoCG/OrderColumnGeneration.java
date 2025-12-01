@@ -1,4 +1,4 @@
-package algo;
+package algoCG;
 
 import Utils.CommonUtils;
 import Utils.GurobiUtils;
@@ -131,7 +131,7 @@ public class OrderColumnGeneration {
 
         // 总时间限制
         int totalTimeLimit = (int) (Constants.ITERATION_TIME_LIMIT * (1 - Constants.RMPSOLVE_PROPORTION));
-
+        System.out.println("算法初始化完成！");
         // 循环条件：剩余时间>0 且 未超过最大列数
         while (true) {
             // 1. 检查是否已超时或达到最大列数，提前退出

@@ -1,4 +1,4 @@
-package algo;
+package algoCG;
 /*
 public class old {
     /* 双向标号搜索

@@ -1,6 +1,5 @@
-package algo;
+package algoCG;
 
-import Utils.ResultProcess;
 import baseinfo.Constants;
 import impl.Instance;
 import impl.Order;

@@ -1,5 +1,5 @@
-import Utils.ResultProcess;
-import algo.GurobiSolve;
+import algoCG.ResultProcess;
+import algoCG.GurobiSolve;
 import baseinfo.Constants;
 import com.gurobi.gurobi.GRBException;
 import impl.Instance;
