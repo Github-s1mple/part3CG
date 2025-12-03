@@ -64,7 +64,7 @@ public class Depot {
         fence.setFenceValue(0);
         fence.setMinDispatchNum(0.0);
         fence.setMaxDispatchNum(0.0);
-        fence.setVaildArcFence(validArcFence);
+        fence.setValidArcFence(validArcFence);
         fence.setNearestDiffLabelDist(nearestDiffLabelDist);
         fence.setConstName("ND" + index);
         return fence;

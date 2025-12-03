@@ -187,7 +187,6 @@ public class FirstStageLocationModel {
             GRBConstr constr = model.addConstr(expr, GRB.EQUAL, 1.0, constrName);
             constrMap.put(constrName, constr);
         }
-        System.out.printf("添加基础需求唯一分配约束：%d条%n", G.size());
     }
 
     /**
@@ -211,7 +210,6 @@ public class FirstStageLocationModel {
                 count++;
             }
         }
-        System.out.printf("添加基础需求分配-选址关联约束：%d条%n", count);
     }
 
     /**
@@ -231,15 +229,14 @@ public class FirstStageLocationModel {
             GRBConstr constr = model.addConstr(expr, GRB.EQUAL, 1.0, constrName);
             constrMap.put(constrName, constr);
         }
-        System.out.printf("添加额外需求唯一分配约束：%d条%n", G.size());
     }
 
     /**
      * 约束4：额外需求特殊约束（原约束3.5）
      * 数学表达：∀i∈G，∀m∈C，∀n∈C，M·(2 - Xs_in - O_m) ≥ Δ_in - Δ_mv
-     * 注：Δ_in/Δ_mv需替换为你的实际计算逻辑（如栅格-候选点距离差）
      */
     private void addExtraDemandSpecialConstraints() throws GRBException {
+        List<HashMap<Integer, Double>> depotToFenceDist = input.getCandidateDistanceMatrix();
         int count = 0;
         for (int i : G) {
             for (int m : C) {
@@ -253,8 +250,22 @@ public class FirstStageLocationModel {
                     expr.addTerm(Constants.M, varMap.get(xsVarName));
                     expr.addTerm(Constants.M, varMap.get(oVarName));
 
-                    // Δ_in - Δ_mv：替换为你的实际计算逻辑（示例中暂设为0.0）
-                    double delta = 0.0;
+                    double delta;
+                    // Δ_in - Δ_im
+                    try {
+                        int fenceIdx = i;
+                        int depotMIdx = -m - 1;
+                        int depotNIdx = -n - 1;
+                        HashMap<Integer, Double> distMMap = depotToFenceDist.get(depotMIdx);
+                        HashMap<Integer, Double> distNMap = depotToFenceDist.get(depotNIdx);
+                        double distM = distMMap.get(fenceIdx) * 1000;
+                        double distN = distNMap.get(fenceIdx) * 1000;
+                        delta = distN - distM;
+                        } catch (Exception e) {
+                            System.err.printf("路径%d→%d、%d）距离计算失败，按0处理：%s%n", i, m, n, e.getMessage());
+                            delta = 0.0;
+                    }
+
                     double rhs = 2 * Constants.M - delta;
 
                     GRBConstr constr = model.addConstr(expr, GRB.GREATER_EQUAL, rhs, constrName);
@@ -263,7 +274,6 @@ public class FirstStageLocationModel {
                 }
             }
         }
-        System.out.printf("添加额外需求特殊约束：%d条%n", count);
     }
 
     /**
@@ -287,7 +297,6 @@ public class FirstStageLocationModel {
                 count++;
             }
         }
-        System.out.printf("添加额外需求分配-选址关联约束：%d条%n", count);
     }
 
     /**

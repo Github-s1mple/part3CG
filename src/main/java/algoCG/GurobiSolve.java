@@ -439,7 +439,6 @@ public class GurobiSolve {
      * 5. 装载量与访问关联约束
      */
     private void addLoadVisitLinkConstraints() throws GRBException {
-        double eps = 1e-6; // 极小值，避免数值误差
         for (int i : N) {
             Fence fence = fences.getFenceList().get(i - 1);
             double demand = fence.getDeliverDemand();
@@ -460,7 +459,7 @@ public class GurobiSolve {
                 GRBLinExpr left2 = new GRBLinExpr();
                 left2.addTerm(1.0, xVar);
                 GRBLinExpr right2 = new GRBLinExpr();
-                right2.addTerm(1/eps, dVar);
+                right2.addTerm((double)Constants.M, dVar);
                 model.addConstr(left2, GRB.LESS_EQUAL, right2, constrName + "_visit2load");
 
                 // 约束3：访问次数≤1（原有Xik是二进制变量，此约束可省略，但确保定义正确）

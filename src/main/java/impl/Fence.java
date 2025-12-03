@@ -23,7 +23,7 @@ public class Fence {
     private double fenceValue;
     private double minDispatchNum;
     private double maxDispatchNum;
-    private ArrayList<Integer> vaildArcFence;
+    private ArrayList<Integer> validArcFence;
     private double nearestDiffLabelDist;
     private String constName;
     private Boolean isFakeFence;
@@ -38,7 +38,7 @@ public class Fence {
         this.deliverDemand = deliverDemand;
         this.distanceMap = new HashMap<>();
         this.constName = "F" + index;
-        this.vaildArcFence = new ArrayList<>();
+        this.validArcFence = new ArrayList<>();
         this.originalFenceValue = unitPrice;
         this.nearestDiffLabelDist = 9999.0;
         this.isFakeFence = isFakeFence;
@@ -50,7 +50,7 @@ public class Fence {
             Double distance = distances.get(targetIndex);
             distanceMap.put(targetIndex + 1, distance);
             if (distance <= Constants.MAX_DISTANCE / 2){
-                vaildArcFence.add(targetIndex + 1);
+                validArcFence.add(targetIndex + 1);
             }
         }
     }
@@ -64,6 +64,6 @@ public class Fence {
     }
 
     public void addFakeDepot() {
-        vaildArcFence.add(999);
+        validArcFence.add(999);
     }
 }

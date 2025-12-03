@@ -108,7 +108,7 @@ public class BidLabeling {
     private void initialize() {
         for (Integer i : fences.getFenceIndexList()) {
             Fence fenceI = fences.getFence(i);
-            for (Integer j : fenceI.getVaildArcFence()) {
+            for (Integer j : fenceI.getValidArcFence()) {
                 double currentDist = fenceI.getDistance(j);
                 fenceI.setNearestDiffLabelDist(min(fenceI.getNearestDiffLabelDist(), currentDist));
             }
@@ -342,7 +342,7 @@ public class BidLabeling {
         boolean isForward = label.isForward();
 
         // 遍历当前节点的所有有效后续节点
-        for (Integer nextNode : currentFence.getVaildArcFence()) {
+        for (Integer nextNode : currentFence.getValidArcFence()) {
             // 跳过禁忌节点（自身或已访问节点）
             if (label.getTabu().get(nextNode)) {
                 continue;
@@ -485,7 +485,7 @@ public class BidLabeling {
         Fence backwardStart = fences.getFence(backwardLabel.getCurFence());
 
         // 检查弧是否存在（前向终点→后向起点）
-        if (!forwardEnd.getVaildArcFence().contains(backwardStart.getIndex())) {
+        if (!forwardEnd.getValidArcFence().contains(backwardStart.getIndex())) {
             return;
         }
 

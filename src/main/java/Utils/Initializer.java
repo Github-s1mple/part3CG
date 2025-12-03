@@ -186,14 +186,9 @@ public class Initializer {
                 Row row = sheet.getRow(rowNum);
                 if (row == null) continue;
 
-                // 读取候选点经纬度：A列（索引0）=经度，B列（索引1）=纬度（兼容数字/字符串）
-                double candidateLon = getCellValueAsDouble(row.getCell(0));
-                double candidateLat = getCellValueAsDouble(row.getCell(1));
-                double candidateCost = getCellValueAsDouble(row.getCell(2));
-                // 过滤无效经纬度
-                if (Double.isNaN(candidateLon) || Double.isNaN(candidateLat) || Double.isNaN(candidateCost)) {
-                    continue;
-                }
+                Double candidateLon = convertNaNToNull(getCellValueAsDouble(row.getCell(0)));
+                Double candidateLat = convertNaNToNull(getCellValueAsDouble(row.getCell(1)));
+                Double candidateCost = convertNaNToNull(getCellValueAsDouble(row.getCell(2)));
 
                 // 创建Candidate并计算到所有围栏的距离
                 Candidate candidate = new Candidate(-rowNum, candidateLon, candidateLat, candidateCost);
@@ -266,5 +261,9 @@ public class Initializer {
             }
         }
         return minDistance;
+    }
+
+    private static Double convertNaNToNull(Double value) {
+        return (value != null && Double.isNaN(value)) ? null : value;
     }
 }
