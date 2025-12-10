@@ -1,6 +1,7 @@
 package Utils;
 
 import impl.Order;
+import org.apache.poi.ss.usermodel.Cell;
 
 import java.util.Comparator;
 import java.util.List;
@@ -91,6 +92,18 @@ public class CommonUtils {
     public static void displayOrders(List<Order> orderPool) {
         for (Order order : orderPool) {
             return;
+        }
+    }
+
+    public static double getCellValue(Cell cell) {
+        if (cell == null) return 0.0;
+        switch (cell.getCellType()) {
+            case NUMERIC:
+                return cell.getNumericCellValue();
+            case STRING:
+                return Double.parseDouble(cell.getStringCellValue().trim());
+            default:
+                throw new IllegalArgumentException("不支持的单元格类型：" + cell.getCellType());
         }
     }
 }

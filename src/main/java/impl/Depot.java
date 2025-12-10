@@ -44,7 +44,7 @@ public class Depot {
                     fence[1], fence[0]   // 围栏的纬度（fence[1]）、经度（fence[0]）
             );
             depotMap.put(index + 1, distance);
-            if (distance <= Constants.MAX_DISTANCE / 2){
+            if (distance <= Constants.TRUCK_MAX_DISTANCE / 2){
                 validArcFence.add(index + 1);
             }
         }

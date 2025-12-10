@@ -3,11 +3,12 @@ import com.gurobi.gurobi.GRBException;
 import impl.*;
 import stage1.FirstStageLocationModel;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
 public class Stage1Test {
-    public static void main(String[] args) throws GRBException {
+    public static void main(String[] args) throws GRBException, IOException {
         // 1. 构造测试输入数据（替换为你的实际数据）
         InputData input = new InputData();
         // 2. 初始化并构建模型
@@ -25,8 +26,7 @@ public class Stage1Test {
             System.out.println("\n【传递给第二阶段的信息】");
             System.out.println("========================================");
             System.out.println("选中的候选点：" + result.getSelectedCandidates());
-            System.out.println("基础需求分配：" + result.getBaseAllocation());
-            System.out.println("额外需求分配：" + result.getExtraAllocation());
+            System.out.println("需求分配：" + result.getExtraAllocation());
             System.out.println("========================================");
         }
     }

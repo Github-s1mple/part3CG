@@ -662,7 +662,7 @@ public class GurobiSolve {
                 }
             }
             // 约束：总行驶距离 ≤ 载具最大距离
-            GRBConstr constr = model.addConstr(expr, GRB.LESS_EQUAL, Constants.MAX_DISTANCE, constrName);
+            GRBConstr constr = model.addConstr(expr, GRB.LESS_EQUAL, Constants.TRUCK_MAX_DISTANCE, constrName);
             constrMap.put(constrName, constr);
         }
     }

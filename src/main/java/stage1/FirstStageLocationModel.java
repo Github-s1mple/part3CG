@@ -13,6 +13,7 @@ import static Utils.GurobiUtils.getStatusDescription;
 
 /**
  * 第一阶段选址模型：对应数学模型(3.1)-(3.9)
+ * 核心功能：确定候选配送中心的选址方案及栅格额外需求的分配策略
  */
 @Setter
 @Getter
@@ -21,126 +22,134 @@ public class FirstStageLocationModel {
     private final InputData input;
     private final Candidates candidates;
     private final Fences fences;
+    private final List<HashMap<Integer, Double>> depotToFenceDist;  // 候选点到栅格的距离矩阵
     // Gurobi核心对象
-    private GRBEnv env;
-    private GRBModel model;
-    // 变量缓存：key=规范变量名，value=变量对象（统一管理）
+    private GRBEnv env;         // Gurobi环境
+    private GRBModel model;     // Gurobi模型实例
+    // 变量缓存：key=规范变量名，value=变量对象（统一管理所有决策变量）
     private HashMap<String, GRBVar> varMap;
-    // 约束缓存：key=规范约束名，value=约束对象（便于后续管理/冲突分析）
+    // 约束缓存：key=规范约束名，value=约束对象（便于后续管理和冲突分析）
     private Map<String, GRBConstr> constrMap;
     // 问题维度参数
     private int candidatesNum;  // 候选配送中心数量
     private int fencesNum;       // 栅格数量
-    // 集合定义（统一ID管理）
+    // 集合定义（统一ID管理，与数学模型保持一致）
     private Set<Integer> C;     // 候选点集合（C = candidate IDs）
-    private Set<Integer> G;     // 栅格集合（G = fence IDs）
-    // 格式化输出（保留2位小数，与第二阶段一致）
+    private Set<Integer> N;     // 栅格集合（N = fence IDs，原注释G为笔误）
+    // 格式化输出（保留2位小数，与第二阶段格式统一）
     private final DecimalFormat df = new DecimalFormat("0.00");
-    // 输出开关（控制日志详细程度）
+    // 输出开关（控制日志详细程度：true输出详细日志，false仅输出关键信息）
     private Boolean outputFlag = false;
-    // 求解耗时统计
+    // 求解耗时统计（单位：秒）
     private double totalTimeSec;
-
+    // 存储固定的O_i取值（key=候选点ID，value=0或1，为空表示不固定）
+    private Map<Integer, Integer> fixedOValues;
     /**
-     * 构造函数：初始化输入数据、问题维度、Gurobi环境
+     * 构造函数：初始化输入数据、问题维度及Gurobi环境
+     * @param input 输入数据总对象，包含候选点、栅格及距离矩阵等信息
+     * @throws GRBException Gurobi环境初始化可能抛出的异常
      */
     public FirstStageLocationModel(InputData input) throws GRBException {
         this.input = input;
         this.candidates = input.getCandidates();
         this.fences = input.getFences();
-        // 初始化问题维度
+        // 初始化问题维度参数
         this.candidatesNum = input.getCandidates().size();
         this.fencesNum = input.getFences().size();
-
+        this.depotToFenceDist = input.getCandidateDistanceMatrix();
         // 初始化集合（统一ID管理，与第二阶段保持一致）
-        this.C = new HashSet<>(this.candidates.getCandidateIndexes());  // 候选点集合
-        this.G = new HashSet<>(this.fences.getFenceIndexList());      // 栅格集合
-
-        // 初始化变量/约束缓存（统一管理，便于后续查询）
+        this.C = new HashSet<>(this.candidates.getCandidateIndexes());  // 候选点ID集合
+        this.N = new HashSet<>(this.fences.getFenceIndexList());         // 栅格ID集合（修正原注释G为N）
+        this.fixedOValues = input.getInitialOj();
+        // 初始化变量/约束缓存（统一管理，便于后续查询和修改）
         this.varMap = new HashMap<>();
         this.constrMap = new HashMap<>();
 
-        // 初始化Gurobi环境和模型（参数与第二阶段对齐）
+        // 初始化Gurobi环境和模型（参数与第二阶段对齐，保证求解策略一致性）
         this.env = new GRBEnv();
         this.model = new GRBModel(env);
 
         // 设置Gurobi求解参数（与第二阶段保持一致的求解策略）
-        model.set(GRB.IntParam.OutputFlag, outputFlag ? 1 : 0);  // 日志输出开关
-        model.set(GRB.DoubleParam.FeasibilityTol, 1e-5);         // 可行性公差
-        model.set(GRB.IntParam.Presolve, 1);                     // 启用预处理
-        model.set(GRB.DoubleParam.MIPGap, 0.01);                 // MIP求解间隙（1%）
-        model.set(GRB.StringParam.LogFile, "first_stage.log");   // 日志文件输出
+        model.set(GRB.IntParam.OutputFlag, outputFlag ? 1 : 0);  // 日志输出开关（1=开启，0=关闭）
+        model.set(GRB.DoubleParam.FeasibilityTol, 1e-5);         // 可行性公差（控制约束满足精度）
+        model.set(GRB.IntParam.Presolve, 1);                     // 启用预处理（加速求解）
+        model.set(GRB.DoubleParam.MIPGap, 0.01);                 // MIP求解间隙（1%，达到该间隙即停止）
+        model.set(GRB.StringParam.LogFile, "first_stage.log");   // 日志文件输出路径
     }
 
     /**
-     * 定义所有决策变量（对应原模型O_i、X^b_ij、X^s_ij）
-     * 变量命名规范：统一格式，便于调试和对接第二阶段
+     * 定义所有决策变量（对应原模型O_i、Xs_ij）
+     * 变量命名规范：采用"变量类型_索引1_索引2"格式，便于调试和对接第二阶段
+     * @throws GRBException 变量添加过程可能抛出的异常
      */
     public void defineVariables() throws GRBException {
         // 1. O_i：是否选择候选点i（0-1变量）
         // 命名规范：O_候选点ID
         for (int i : C) {
             String varName = String.format("O_%d", i);
-            GRBVar var = model.addVar(
-                    0.0, 1.0,
-                    0.0,  // 目标系数：后续设置
-                    GRB.BINARY,
-                    varName
-            );
+            GRBVar var;
+
+            // 检查是否需要固定当前O_i的值（新增逻辑）
+            Integer fixedValue = fixedOValues.get(i);
+            if (fixedValue != null) {
+                // 固定为已知值：上下界设为fixedValue，变量类型改为连续型（实际为常数）
+                var = model.addVar(
+                        fixedValue, fixedValue,  // 上下界锁定为固定值
+                        0.0,                      // 目标系数（暂设为0）
+                        GRB.CONTINUOUS,           // 常数用连续型表示
+                        varName
+                );
+                System.out.printf("已固定变量 O_%d = %d%n", i, fixedValue);
+            } else {
+                // 不固定：保持原有二进制变量特性
+                var = model.addVar(
+                        0.0, 1.0,                // 变量上下界（0-1）
+                        0.0,                      // 目标系数（暂设为0）
+                        GRB.BINARY,               // 变量类型（二进制）
+                        varName                   // 变量名
+                );
+            }
             varMap.put(varName, var);
         }
 
-        // 2. Xb_ij：栅格i的基础需求分配给候选点j（0-1变量）
-        // 命名规范：Xb_栅格ID_候选点ID
-        for (int i : G) {
-            for (int j : C) {
-                String varName = String.format("Xb_%d_%d", i, j);
-                GRBVar var = model.addVar(
-                        0.0, 1.0,
-                        0.0,  // 目标系数：基础分配无直接成本（成本在第二阶段）
-                        GRB.BINARY,
-                        varName
-                );
-                varMap.put(varName, var);
-            }
-        }
-
-        // 3. Xs_ij：栅格i的额外需求分配给候选点j（0-1变量）
-        // 命名规范：Xs_栅格ID_候选点ID
-        for (int i : G) {
+        // 2. Xs_ij：栅格i的额外需求是否分配给候选点j（0-1变量，1=分配，0=不分配）
+        // 命名规范：Xs_栅格ID_候选点ID（原注释"栅格i"修正为"栅格i"，"候选点j"明确索引含义）
+        for (int i : N) {
             for (int j : C) {
                 String varName = String.format("Xs_%d_%d", i, j);
                 GRBVar var = model.addVar(
-                        0.0, 1.0,
-                        0.0,  // 目标系数：额外分配无直接成本（成本在第二阶段）
-                        GRB.BINARY,
-                        varName
+                        0.0, 1.0,                // 变量上下界（0-1）
+                        0.0,                      // 目标系数：额外分配无直接成本（成本在第二阶段体现）
+                        GRB.BINARY,               // 变量类型（二进制）
+                        varName                   // 变量名
                 );
                 varMap.put(varName, var);
             }
         }
 
-        // 变量定义完成后更新模型
+        // 变量定义完成后更新模型（使变量生效）
         model.update();
         System.out.printf("第一阶段变量定义完成：共%d个变量%n", varMap.size());
     }
 
     /**
-     * 设置目标函数（原模型3.1）：min Σf_i·O_i + 第二阶段成本期望（期望项通过Benders割平面后续添加）
+     * 设置目标函数（原模型3.1）：最小化候选点固定成本与第二阶段期望成本之和
+     * 注：第二阶段成本期望通过Benders割平面后续添加，此处仅包含固定成本项
+     * @throws GRBException 目标函数设置可能抛出的异常
      */
     public void setObjective() throws GRBException {
-        GRBLinExpr objExpr = new GRBLinExpr();
+        GRBLinExpr objExpr = new GRBLinExpr();  // 线性表达式对象（用于构建目标函数）
 
-        // 目标项：候选点固定成本之和（Σf_i·O_i）
+        // 目标项：候选点固定成本之和（Σf_i·O_i，f_i为候选点i的固定建设成本）
         for (int i : C) {
             String varName = String.format("O_%d", i);
             GRBVar var = varMap.get(varName);
             Candidate candidate = candidates.getCandidate(i);
-            double buildCost = candidate.getBuildCost();  // 候选点i的固定成本f_i
-            objExpr.addTerm(buildCost, var);
+            double buildCost = candidate.getBuildCost();  // 获取候选点i的固定成本f_i
+            objExpr.addTerm(buildCost, var);              // 添加f_i·O_i到目标表达式
         }
 
-        // 设置目标函数：最小化
+        // 设置目标函数：最小化总固定成本（含后续添加的第二阶段期望成本）
         model.setObjective(objExpr, GRB.MINIMIZE);
         model.update();
         System.out.println("第一阶段目标函数设置完成");
@@ -148,156 +157,140 @@ public class FirstStageLocationModel {
 
     /**
      * 添加所有核心约束（对应原模型3.2-3.6）
-     * 约束按类型拆分，便于维护和冲突分析
+     * 约束按类型拆分实现，提升代码可维护性和冲突分析效率
+     * @throws GRBException 约束添加过程可能抛出的异常
      */
     public void addCoreConstraints() throws GRBException {
-        // 1. 基础需求唯一分配约束（原约束3.2）
-        addBaseDemandUniqueAllocationConstraints();
+        // 1. 最大配送距离约束（限制超出服务范围的分配）
+        addMaxDistanceConstraints();
 
-        // 2. 基础需求分配-选址关联约束（原约束3.3）
-        addBaseAllocationLocationLinkConstraints();
-
-        // 3. 额外需求唯一分配约束（原约束3.4）
+        // 2. 额外需求唯一分配约束（原约束3.4）
         addExtraDemandUniqueAllocationConstraints();
 
-        // 4. 额外需求特殊约束（原约束3.5）
+        // 3. 额外需求特殊约束（原约束3.5，确保分配给最近候选点）
         addExtraDemandSpecialConstraints();
 
-        // 5. 额外需求分配-选址关联约束（原约束3.6）
+        // 4. 额外需求分配-选址关联约束（原约束3.6，确保仅分配给已选中的候选点）
         addExtraAllocationLocationLinkConstraints();
 
-        model.update();
+        model.update();  // 更新模型使约束生效
         System.out.printf("第一阶段约束添加完成：共%d条约束%n", constrMap.size());
     }
 
     /**
-     * 约束1：基础需求唯一分配（原约束3.2）
-     * 数学表达：∀i∈G，Σ(j∈C) Xb_ij = 1
-     */
-    private void addBaseDemandUniqueAllocationConstraints() throws GRBException {
-        for (int i : G) {
-            GRBLinExpr expr = new GRBLinExpr();
-            String constrName = String.format("BaseDemandUnique_i%d", i);
-
-            for (int j : C) {
-                String varName = String.format("Xb_%d_%d", i, j);
-                expr.addTerm(1.0, varMap.get(varName));
-            }
-
-            GRBConstr constr = model.addConstr(expr, GRB.EQUAL, 1.0, constrName);
-            constrMap.put(constrName, constr);
-        }
-    }
-
-    /**
-     * 约束2：基础需求分配-选址关联（原约束3.3）
-     * 数学表达：∀i∈G，∀j∈C，Xb_ij ≤ O_j
-     */
-    private void addBaseAllocationLocationLinkConstraints() throws GRBException {
-        int count = 0;
-        for (int i : G) {
-            for (int j : C) {
-                String constrName = String.format("BaseAllocLink_i%d_j%d", i, j);
-                GRBLinExpr expr = new GRBLinExpr();
-
-                String xbVarName = String.format("Xb_%d_%d", i, j);
-                String oVarName = String.format("O_%d", j);
-                expr.addTerm(1.0, varMap.get(xbVarName));
-                expr.addTerm(-1.0, varMap.get(oVarName));
-
-                GRBConstr constr = model.addConstr(expr, GRB.LESS_EQUAL, 0.0, constrName);
-                constrMap.put(constrName, constr);
-                count++;
-            }
-        }
-    }
-
-    /**
-     * 约束3：额外需求唯一分配（原约束3.4）
-     * 数学表达：∀i∈G，Σ(j∈C) Xs_ij = 1
+     * 约束3.4：额外需求唯一分配约束
+     * 数学表达：∀i∈N，Σ(j∈C) Xs_ij = 1
+     * 含义：每个栅格的额外需求必须且只能分配给一个候选点
+     * @throws GRBException 约束添加可能抛出的异常
      */
     private void addExtraDemandUniqueAllocationConstraints() throws GRBException {
-        for (int i : G) {
-            GRBLinExpr expr = new GRBLinExpr();
-            String constrName = String.format("ExtraDemandUnique_i%d", i);
+        for (int i : N) {  // 遍历每个栅格i
+            GRBLinExpr expr = new GRBLinExpr();  // 构建约束表达式
+            String constrName = String.format("ExtraDemandUnique_i%d", i);  // 约束名：唯一分配_栅格i
 
-            for (int j : C) {
-                String varName = String.format("Xs_%d_%d", i, j);
-                expr.addTerm(1.0, varMap.get(varName));
+            for (int j : C) {  // 遍历所有候选点j
+                String varName = String.format("Xs_%d_%d", i, j);  // 获取Xs_ij变量
+                expr.addTerm(1.0, varMap.get(varName));             // 累加Xs_ij到表达式
             }
 
+            // 添加约束：Xs_i1 + Xs_i2 + ... + Xs_ik = 1
             GRBConstr constr = model.addConstr(expr, GRB.EQUAL, 1.0, constrName);
             constrMap.put(constrName, constr);
         }
     }
 
     /**
-     * 约束4：额外需求特殊约束（原约束3.5）
-     * 数学表达：∀i∈G，∀m∈C，∀n∈C，M·(2 - Xs_in - O_m) ≥ Δ_in - Δ_mv
+     * 约束3.5：额外需求特殊约束（最近候选点优先分配）
+     * 数学表达：∀i∈N，∀m∈C，∀n∈C（n比m更近于i），Xs_im + O_n ≤ 1
+     * 含义：若候选点n比m更近于栅格i，且n被选中，则i的额外需求不能分配给m
+     * @throws GRBException 约束添加可能抛出的异常
      */
     private void addExtraDemandSpecialConstraints() throws GRBException {
-        List<HashMap<Integer, Double>> depotToFenceDist = input.getCandidateDistanceMatrix();
-        int count = 0;
-        for (int i : G) {
-            for (int m : C) {
+        for (int i : N) {  // 遍历每个栅格i
+            for (int m : C) {  // 遍历每个候选点m（作为潜在分配对象）
+                // 寻找比m更近于i的候选点n
                 for (int n : C) {
-                    String constrName = String.format("ExtraSpecial_i%d_m%d_n%d", i, m, n);
-                    GRBLinExpr expr = new GRBLinExpr();
+                    if (m == n) continue;  // 跳过自身（m与n为同一候选点时无需判断）
 
-                    // 变量项：M·Xs_in + M·O_m
-                    String xsVarName = String.format("Xs_%d_%d", i, n);
-                    String oVarName = String.format("O_%d", m);
-                    expr.addTerm(Constants.M, varMap.get(xsVarName));
-                    expr.addTerm(Constants.M, varMap.get(oVarName));
+                    // 获取候选点m和n到栅格i的距离（转换为米，确保单位一致）
+                    int depotMIdx = -m - 1;  // 距离矩阵中m的索引（业务约定格式）
+                    int depotNIdx = -n - 1;  // 距离矩阵中n的索引（业务约定格式）
+                    HashMap<Integer, Double> distMMap = depotToFenceDist.get(depotMIdx);
+                    HashMap<Integer, Double> distNMap = depotToFenceDist.get(depotNIdx);
+                    double distM = distMMap.get(i) * 1000;  // 转换为米
+                    double distN = distNMap.get(i) * 1000;  // 转换为米
 
-                    double delta;
-                    // Δ_in - Δ_im
-                    try {
-                        int fenceIdx = i;
-                        int depotMIdx = -m - 1;
-                        int depotNIdx = -n - 1;
-                        HashMap<Integer, Double> distMMap = depotToFenceDist.get(depotMIdx);
-                        HashMap<Integer, Double> distNMap = depotToFenceDist.get(depotNIdx);
-                        double distM = distMMap.get(fenceIdx) * 1000;
-                        double distN = distNMap.get(fenceIdx) * 1000;
-                        delta = distN - distM;
-                        } catch (Exception e) {
-                            System.err.printf("路径%d→%d、%d）距离计算失败，按0处理：%s%n", i, m, n, e.getMessage());
-                            delta = 0.0;
+                    // 若n比m严格更近（排除距离相等的情况，避免冗余约束）
+                    if (distN < distM - 1e-6) {
+                        GRBLinExpr expr = new GRBLinExpr();
+                        // 添加Xs_im变量（系数1.0）：表示i的额外需求是否分配给m
+                        String xsVarName = String.format("Xs_%d_%d", i, m);
+                        expr.addTerm(1.0, varMap.get(xsVarName));
+                        // 添加O_n变量（系数1.0）：表示n是否被选中
+                        String oVarName = String.format("O_%d", n);
+                        expr.addTerm(1.0, varMap.get(oVarName));
+
+                        // 添加约束：Xs_im + O_n ≤ 1（若n被选中，则Xs_im必须为0）
+                        String constrName = String.format("NearestConstraint_i%d_m%d_n%d", i, m, n);
+                        GRBConstr constr = model.addConstr(expr, GRB.LESS_EQUAL, 1.0, constrName);
+                        constrMap.put(constrName, constr);
                     }
-
-                    double rhs = 2 * Constants.M - delta;
-
-                    GRBConstr constr = model.addConstr(expr, GRB.GREATER_EQUAL, rhs, constrName);
-                    constrMap.put(constrName, constr);
-                    count++;
                 }
             }
         }
     }
 
     /**
-     * 约束5：额外需求分配-选址关联（原约束3.6）
-     * 数学表达：∀i∈G，∀j∈C，Xs_ij ≤ O_j
+     * 约束3.6：额外需求分配-选址关联约束
+     * 数学表达：∀i∈N，∀j∈C，Xs_ij ≤ O_j
+     * 含义：栅格i的额外需求只能分配给已选中的候选点j（O_j=1时Xs_ij才可能为1）
+     * @throws GRBException 约束添加可能抛出的异常
      */
     private void addExtraAllocationLocationLinkConstraints() throws GRBException {
-        int count = 0;
-        for (int i : G) {
-            for (int j : C) {
-                String constrName = String.format("ExtraAllocLink_i%d_j%d", i, j);
+        for (int i : N) {  // 遍历每个栅格i
+            for (int j : C) {  // 遍历每个候选点j
+                String constrName = String.format("ExtraAllocLink_i%d_j%d", i, j);  // 约束名：分配关联_栅格i_候选点j
                 GRBLinExpr expr = new GRBLinExpr();
 
+                // 获取变量：Xs_ij（i的额外需求分配给j）和O_j（j是否被选中）
                 String xsVarName = String.format("Xs_%d_%d", i, j);
                 String oVarName = String.format("O_%d", j);
-                expr.addTerm(1.0, varMap.get(xsVarName));
-                expr.addTerm(-1.0, varMap.get(oVarName));
+                expr.addTerm(1.0, varMap.get(xsVarName));   // +Xs_ij
+                expr.addTerm(-1.0, varMap.get(oVarName));   // -O_j
 
+                // 添加约束：Xs_ij - O_j ≤ 0 → Xs_ij ≤ O_j
                 GRBConstr constr = model.addConstr(expr, GRB.LESS_EQUAL, 0.0, constrName);
                 constrMap.put(constrName, constr);
-                count++;
             }
         }
     }
+
+    /**
+     * 最大配送距离约束（对应业务规则：超出最大服务距离的候选点不能分配需求）
+     * 数学表达：∀i∈N，∀j∈C，若d_ij > 最大服务距离，则Xs_ij = 0
+     * 含义：栅格i的额外需求不能分配给距离超过最大服务范围的候选点j
+     * @throws GRBException 约束添加可能抛出的异常
+     */
+    private void addMaxDistanceConstraints() throws GRBException {
+        for (int i : N) {  // 遍历每个栅格i
+            for (int j : C) {  // 遍历每个候选点j
+                // 获取候选点j到栅格i的距离（单位：原单位，与Constants中阈值单位一致）
+                int depotIdx = -j - 1;  // 距离矩阵中j的索引（业务约定格式）
+                HashMap<Integer, Double> distMap = depotToFenceDist.get(depotIdx);
+                double d_ij = distMap.get(i);
+
+                // 若距离超过最大服务距离（附加微小误差避免浮点比较问题）
+                if (d_ij > Constants.BIKE_MAX_DISTANCE + 1e-6) {
+                    String xsVarName = String.format("Xs_%d_%d", i, j);  // Xs_ij变量
+                    String constrName = String.format("MaxDistanceConstraint_i%d_j%d", i, j);
+                    // 添加约束：Xs_ij ≤ 0（强制该变量为0）
+                    GRBConstr constr = model.addConstr(varMap.get(xsVarName), GRB.LESS_EQUAL, 0.0, constrName);
+                    constrMap.put(constrName, constr);
+                }
+            }
+        }
+    }
+
 
     /**
      * 求解模型并返回选址结果（对接第二阶段的核心方法）
@@ -307,6 +300,13 @@ public class FirstStageLocationModel {
         long startTime = System.currentTimeMillis();
         System.out.println("========================================");
         System.out.println("开始求解第一阶段选址模型......");
+        // 输出固定O_i的信息
+        if (!fixedOValues.isEmpty()) {
+            System.out.println("当前模式：固定O_i取值，求解其他变量");
+            System.out.println("固定的O_i值：" + fixedOValues);
+        } else {
+            System.out.println("当前模式：自动求解所有变量");
+        }
         System.out.println("========================================");
 
         try {
@@ -376,23 +376,9 @@ public class FirstStageLocationModel {
         }
         result.setSelectedCandidates(selectedCandidates);
 
-        // 2. 提取基础需求分配结果（Xb_ij=1）
-        Map<Integer, Integer> baseAllocation = new HashMap<>();
-        for (int i : G) {
-            for (int j : C) {
-                String varName = String.format("Xb_%d_%d", i, j);
-                GRBVar var = varMap.get(varName);
-                if (var.get(GRB.DoubleAttr.X) > 0.5) {
-                    baseAllocation.put(i, j);
-                    break;
-                }
-            }
-        }
-        result.setBaseAllocation(baseAllocation);
-
         // 3. 提取额外需求分配结果（Xs_ij=1）
         Map<Integer, Integer> extraAllocation = new HashMap<>();
-        for (int i : G) {
+        for (int i : N) {
             for (int j : C) {
                 String varName = String.format("Xs_%d_%d", i, j);
                 GRBVar var = varMap.get(varName);
@@ -425,25 +411,11 @@ public class FirstStageLocationModel {
                     i, df.format(val), val > 0.5 ? "选中" : "未选中");
         }
 
-        // 2. 输出Xb_ij：基础需求分配变量
-        System.out.println("\n2. 基础需求分配变量 Xb_ij（Xb_栅格ID_候选点ID = 取值）");
-        System.out.println("----------------------------------------");
-        for (int i : G) {
-            for (int j : C) {
-                String varName = String.format("Xb_%d_%d", i, j);
-                GRBVar var = varMap.get(varName);
-                double val = var.get(GRB.DoubleAttr.X);
-                if (val > 0.5) {
-                    System.out.printf("Xb_%d_%d = %s （栅格%d基础需求分配给候选点%d）%n",
-                            i, j, df.format(val), i, j);
-                }
-            }
-        }
 
         // 3. 输出Xs_ij：额外需求分配变量
         System.out.println("\n3. 额外需求分配变量 Xs_ij（Xs_栅格ID_候选点ID = 取值）");
         System.out.println("----------------------------------------");
-        for (int i : G) {
+        for (int i : N) {
             for (int j : C) {
                 String varName = String.format("Xs_%d_%d", i, j);
                 GRBVar var = varMap.get(varName);

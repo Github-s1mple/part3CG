@@ -112,8 +112,8 @@ public class Initializer {
                 if (row == null) continue;
 
                 // 读取候选点经纬度：A列（索引0）=经度，B列（索引1）=纬度（兼容数字/字符串）
-                double depotLon = getCellValueAsDouble(row.getCell(0));
-                double depotLat = getCellValueAsDouble(row.getCell(1));
+                double depotLon = getCellValueAsDouble(row.getCell(2));
+                double depotLat = getCellValueAsDouble(row.getCell(3));
 
                 // 过滤无效经纬度
                 if (Double.isNaN(depotLon) || Double.isNaN(depotLat)) {
@@ -147,7 +147,7 @@ public class Initializer {
                 try {
                     int currentIndex = startDepotIndex; // 当前行的序号
                     Double capacity = Constants.MAX_CAPACITY;
-                    Double maxDistance = Constants.MAX_DISTANCE;
+                    Double maxDistance = Constants.TRUCK_MAX_DISTANCE;
                     Double minRatioCapacity = Constants.MIN_CARRIER_LOAD;
 
                     Carrier carrier = new Carrier(
@@ -186,9 +186,9 @@ public class Initializer {
                 Row row = sheet.getRow(rowNum);
                 if (row == null) continue;
 
-                Double candidateLon = convertNaNToNull(getCellValueAsDouble(row.getCell(0)));
-                Double candidateLat = convertNaNToNull(getCellValueAsDouble(row.getCell(1)));
-                Double candidateCost = convertNaNToNull(getCellValueAsDouble(row.getCell(2)));
+                Double candidateLon = convertNaNToNull(getCellValueAsDouble(row.getCell(2)));
+                Double candidateLat = convertNaNToNull(getCellValueAsDouble(row.getCell(3)));
+                Double candidateCost = convertNaNToNull(getCellValueAsDouble(row.getCell(4)));
 
                 // 创建Candidate并计算到所有围栏的距离
                 Candidate candidate = new Candidate(-rowNum, candidateLon, candidateLat, candidateCost);

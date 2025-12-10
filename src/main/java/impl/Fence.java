@@ -49,7 +49,7 @@ public class Fence {
         for (Integer targetIndex = 0; targetIndex < distances.size(); targetIndex++) {
             Double distance = distances.get(targetIndex);
             distanceMap.put(targetIndex + 1, distance);
-            if (distance <= Constants.MAX_DISTANCE / 2){
+            if (distance <= Constants.TRUCK_MAX_DISTANCE / 2){
                 validArcFence.add(targetIndex + 1);
             }
         }

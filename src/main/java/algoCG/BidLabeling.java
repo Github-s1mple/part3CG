@@ -389,7 +389,7 @@ public class BidLabeling {
 
                 // 距离约束（累计距离不超过最大距离的一半）
                 double distance_ = currentFence.getDistance(nextNode) + label.getTravelDistance();
-                if (distance_ > Constants.MAX_DISTANCE / 2.0) {
+                if (distance_ > Constants.TRUCK_MAX_DISTANCE / 2.0) {
                     continue;
                 }
 
@@ -492,7 +492,7 @@ public class BidLabeling {
         // 3. 距离检查
         double connectDist = forwardEnd.getDistance(backwardStart.getIndex());
         double totalDist = forwardLabel.getTravelDistance() + connectDist + backwardLabel.getTravelDistance();
-        if (totalDist > Constants.MAX_DISTANCE) {
+        if (totalDist > Constants.TRUCK_MAX_DISTANCE) {
             return;
         }
 

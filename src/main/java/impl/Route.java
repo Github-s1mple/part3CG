@@ -27,7 +27,7 @@ public class Route {
         this.distance = total_dist;
         this.visitNumber = total_visit_num;
         this.fenceList = fenceIndexList;
-        this.maxDistance = Constants.MAX_DISTANCE;
+        this.maxDistance = Constants.TRUCK_MAX_DISTANCE;
         this.maxVisitNumber = Constants.MAX_VISIT_NUM;
         this.depot = depot;
         this.MaxDispatchNum = MaxDispatchNum;
