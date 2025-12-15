@@ -59,7 +59,7 @@ public class Depot {
     }
 
     public Fence depot2Fence(Integer index){
-        Fence fence = new Fence(index, longitude, latitude, 0.0, 0.0, 0.0, 0.0, 0.0, true);
+        Fence fence = new Fence(index, longitude, latitude, 0.0, 0.0, 0.0, 0.0, true);
         fence.setDistanceMap(depotMap);
         fence.setFenceValue(0);
         fence.setMinDispatchNum(0.0);

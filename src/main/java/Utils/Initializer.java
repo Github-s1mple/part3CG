@@ -1,10 +1,7 @@
 package Utils;
 
 import baseinfo.Constants;
-import impl.Candidate;
-import impl.Carrier;
-import impl.Depot;
-import impl.Fence;
+import impl.*;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
@@ -14,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+import static Utils.SelfPickupProbabilityCalculator.calculateSelfPickupProbability;
 import static baseinfo.MapDistance.calculateSphericalDistance;
 
 public class Initializer {
@@ -35,7 +33,7 @@ public class Initializer {
         carrierList = new ArrayList<>();
     }
 
-    public ArrayList<Fence> fenceInitializer(List<List<Double>> distanceMatrix) {
+    public ArrayList<Fence> fenceInitializer(List<List<Double>> distanceMatrix, LocationResult result) {
         System.out.println("开始初始化围栏...");
         fenceList = new ArrayList<>();
 
@@ -59,8 +57,7 @@ public class Initializer {
                     double lat = getCellNumericValue(row.getCell(2));
                     double totalDemand = getCellNumericValue(row.getCell(3)); // 第5列（索引4）
                     double selfDemand = getCellNumericValue(row.getCell(4));  // 第6列（索引5）
-                    double depotDemand = getCellNumericValue(row.getCell(5)); // 第7列（索引6）
-                    double deliverDemand = getCellNumericValue(row.getCell(6)); // 第8列（索引7）
+                    double deliverDemand = getCellNumericValue(row.getCell(5)); // 第8列（索引7）
 
                     // 创建Fence实例
                     Fence fence = new Fence(
@@ -69,7 +66,6 @@ public class Initializer {
                             lat,
                             totalDemand,
                             selfDemand,
-                            depotDemand,
                             deliverDemand,
                             0.0,
                             false
@@ -77,7 +73,20 @@ public class Initializer {
 
                     fence.generateDistanceMap(distanceMatrix);
                     double nearestDepotDistance = calNearestDepotDistance(fence, depotList);
-                    fence.setOriginalFenceValue(nearestDepotDistance * Constants.DISTANCE_TO_NEAREST_FENCE);
+
+                    if (result != null){
+                        Integer targetDepot = result.getExtraAllocation().get(fence.getIndex());
+                        for (Depot depot : depotList) {
+                            if (depot.getIndex().equals(targetDepot)){
+                                double distance = calculateSphericalDistance(depot.getLatitude(), depot.getLongitude(), lat, lon);
+                                fence.setOriginalFenceValue(distance * Constants.DISTANCE_TO_NEAREST_FENCE);
+                                double selfPickDemand = calculateSelfPickupProbability(distance) * totalDemand;
+                                fence.setSelfDemand(selfPickDemand);
+                                fence.setDeliverDemand(totalDemand - selfPickDemand);
+                                break;
+                            }
+                        }
+                    } else fence.setOriginalFenceValue(nearestDepotDistance * Constants.DISTANCE_TO_NEAREST_FENCE);
                     fenceList.add(fence);
 
                 } catch (Exception e) {
@@ -94,33 +103,45 @@ public class Initializer {
         return fenceList;
     }
 
-    public ArrayList<Depot> depotInitializer(List<double[]> fenceCoordinates) {
+
+    public ArrayList<Depot> depotInitializer(List<double[]> fenceCoordinates, LocationResult result) {
         System.out.println("开始初始化仓库地图...");
+        // 校验围栏坐标合法性
         if (fenceCoordinates == null || fenceCoordinates.isEmpty()) {
             System.err.println("围栏坐标为空，无法创建Depot");
             return new ArrayList<>();
         }
 
         depotList = new ArrayList<>();
-        try (FileInputStream fis = new FileInputStream(Objects.equals(Constants.ALGO_MODE, "CG") ? Constants.candidatePointsFilePath : Constants.candidatePointsTestFilePath);
+        // 确定文件路径：若有result则用正式路径，否则根据算法模式选择路径
+        String filePath = (result != null)
+                ? Constants.candidatePointsFilePath
+                : (Objects.equals(Constants.ALGO_MODE, "CG") ? Constants.candidatePointsFilePath : Constants.candidatePointsTestFilePath);
+
+        try (FileInputStream fis = new FileInputStream(filePath);
              Workbook workbook = WorkbookFactory.create(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0);
-            // 跳过表头行（第0行：Longitude,Latitude）
+            // 跳过表头行（第0行）
             for (int rowNum = 1; rowNum <= sheet.getLastRowNum(); rowNum++) {
+                // 若有筛选结果，只处理选中的行（通过rowNum映射的id）
+                if (result != null && !result.getSelectedCandidates().contains(-rowNum)) {
+                    continue;
+                }
+
                 Row row = sheet.getRow(rowNum);
                 if (row == null) continue;
 
-                // 读取候选点经纬度：A列（索引0）=经度，B列（索引1）=纬度（兼容数字/字符串）
+                // 读取经纬度（C列和D列，索引2和3）
                 double depotLon = getCellValueAsDouble(row.getCell(2));
                 double depotLat = getCellValueAsDouble(row.getCell(3));
 
-                // 过滤无效经纬度
+                // 过滤无效坐标
                 if (Double.isNaN(depotLon) || Double.isNaN(depotLat)) {
                     continue;
                 }
 
-                // 创建Depot并计算到所有围栏的距离
+                // 创建Depot并计算距离映射
                 Depot depot = new Depot(-rowNum, depotLon, depotLat);
                 depot.generateDistanceMap(fenceCoordinates);
                 depotList.add(depot);
@@ -129,10 +150,12 @@ public class Initializer {
             System.err.println("读取仓库失败：" + e.getMessage());
             return new ArrayList<>();
         }
+
         depotNum = depotList.size();
         System.out.println("成功生成仓库数：" + depotList.size());
         return depotList;
     }
+
 
     public ArrayList<Carrier> carrierInitializer(boolean isDifferentCarrier) {
         System.out.println("开始初始化载具...");
@@ -251,8 +274,8 @@ public class Initializer {
 
     private double calNearestDepotDistance(Fence fence, List<Depot> depotList) {
         double minDistance = Double.MAX_VALUE;
-        double fenceLon = fence.getLon(); // 假设Fence有getLon()方法
-        double fenceLat = fence.getLat(); // 假设Fence有getLat()方法
+        double fenceLon = fence.getLon();
+        double fenceLat = fence.getLat();
 
         for (Depot depot : depotList) {
             double distance = calculateSphericalDistance(depot.getLatitude(), depot.getLongitude(), fenceLat, fenceLon);

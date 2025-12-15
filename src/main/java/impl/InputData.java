@@ -37,7 +37,7 @@ public class InputData {
         candidates = new Candidates();
         initializer = new Initializer();
         candidates.setCandidateList(initializer.candidateInitializer(candidateMap));
-        fences.setFenceList(initializer.fenceInitializer(distanceMatrix));
+        fences.setFenceList(initializer.fenceInitializer(distanceMatrix, null));
         fences.generateFenceIndexList();
         candidates.generateCandidateIndexList();
         candidateDistanceMatrix = candidates.generateCandidateDistanceMatrix();

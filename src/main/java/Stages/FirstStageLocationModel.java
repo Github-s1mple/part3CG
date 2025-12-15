@@ -1,4 +1,4 @@
-package stage1;
+package Stages;
 
 import baseinfo.Constants;
 import com.gurobi.gurobi.*;
@@ -44,6 +44,8 @@ public class FirstStageLocationModel {
     private double totalTimeSec;
     // 存储固定的O_i取值（key=候选点ID，value=0或1，为空表示不固定）
     private Map<Integer, Integer> fixedOValues;
+    private GRBVar theta;  // 第二阶段期望成本下界变量
+
     /**
      * 构造函数：初始化输入数据、问题维度及Gurobi环境
      * @param input 输入数据总对象，包含候选点、栅格及距离矩阵等信息
@@ -76,6 +78,84 @@ public class FirstStageLocationModel {
         model.set(GRB.DoubleParam.MIPGap, 0.01);                 // MIP求解间隙（1%，达到该间隙即停止）
         model.set(GRB.StringParam.LogFile, "first_stage.log");   // 日志文件输出路径
     }
+
+
+    /**
+     * 扩展变量定义：添加θ变量（L形法核心）
+     */
+    public void defineVariablesWithTheta() throws GRBException {
+        // 先定义原有变量（O_i和Xs_ij）
+        defineVariables();
+
+        // 添加θ变量（初始下界设为-无穷，用一个极小值替代）
+        String thetaName = "Theta";
+        this.theta = model.addVar(
+                -1e18,  // 下界：允许负（但实际第二阶段成本非负，后续会修正）
+                1e18,   // 上界：大常数
+                1.0,    // 目标系数：在目标函数中θ的系数为1（min c^T x + θ）
+                GRB.CONTINUOUS,
+                thetaName
+        );
+        varMap.put(thetaName, theta);
+        model.update();
+        System.out.println("已添加θ变量（第二阶段期望成本下界）");
+    }
+
+    /**
+     * 添加最优性割平面：θ ≥ Σp_s [Q_s(x^k) + π_s^T T_s (x - x^k)]
+     * @param cutExpr 割平面的线性表达式（含x变量和常数项）
+     */
+    public void addOptimalityCut(GRBLinExpr cutExpr) throws GRBException {
+        String cutName = String.format("OptimalityCut_%d", constrMap.size() + 1);
+        // 约束：theta >= cutExpr（cutExpr中已包含x的线性项和常数项）
+        model.addConstr(theta, GRB.GREATER_EQUAL, cutExpr, cutName);
+        constrMap.put(cutName, model.getConstrByName(cutName));
+        model.update();
+        System.out.println("已添加最优性割平面：" + cutName);
+    }
+
+    /**
+     * 添加可行性割平面：σ_s^T T_s x ≤ σ_s^T h_s
+     * @param cutExpr 割平面的线性表达式（含x变量）
+     * @param rhs 右端项
+     */
+    public void addFeasibilityCut(GRBLinExpr cutExpr, double rhs) throws GRBException {
+        String cutName = String.format("FeasibilityCut_%d", constrMap.size() + 1);
+        model.addConstr(cutExpr, GRB.LESS_EQUAL, rhs, cutName);
+        constrMap.put(cutName, model.getConstrByName(cutName));
+        model.update();
+        System.out.println("已添加可行性割平面：" + cutName);
+    }
+
+    /**
+     * 获取当前第一阶段解x^k（O_i和Xs_ij的取值）
+     */
+    public Map<String, Double> getCurrentSolution() throws GRBException {
+        Map<String, Double> solution = new HashMap<>();
+        // 收集O_i的取值
+        for (int i : C) {
+            String varName = String.format("O_%d", i);
+            solution.put(varName, varMap.get(varName).get(GRB.DoubleAttr.X));
+        }
+        // 收集Xs_ij的取值
+        for (int i : N) {
+            for (int j : C) {
+                String varName = String.format("Xs_%d_%d", i, j);
+                solution.put(varName, varMap.get(varName).get(GRB.DoubleAttr.X));
+            }
+        }
+        // 收集theta的取值
+        solution.put("Theta", theta.get(GRB.DoubleAttr.X));
+        return solution;
+    }
+
+    /**
+     * 重置模型求解状态（用于迭代）
+     */
+    public void resetModel() throws GRBException {
+        model.reset();
+    }
+
 
     /**
      * 定义所有决策变量（对应原模型O_i、Xs_ij）
@@ -138,21 +218,22 @@ public class FirstStageLocationModel {
      * @throws GRBException 目标函数设置可能抛出的异常
      */
     public void setObjective() throws GRBException {
-        GRBLinExpr objExpr = new GRBLinExpr();  // 线性表达式对象（用于构建目标函数）
+        GRBLinExpr objExpr = new GRBLinExpr();
 
-        // 目标项：候选点固定成本之和（Σf_i·O_i，f_i为候选点i的固定建设成本）
+        // 原有固定成本项：Σf_i·O_i
         for (int i : C) {
             String varName = String.format("O_%d", i);
             GRBVar var = varMap.get(varName);
-            Candidate candidate = candidates.getCandidate(i);
-            double buildCost = candidate.getBuildCost();  // 获取候选点i的固定成本f_i
-            objExpr.addTerm(buildCost, var);              // 添加f_i·O_i到目标表达式
+            double buildCost = candidates.getCandidate(i).getBuildCost();
+            objExpr.addTerm(buildCost, var);
         }
 
-        // 设置目标函数：最小化总固定成本（含后续添加的第二阶段期望成本）
+        // 添加θ项：目标函数为 min (固定成本 + θ)
+        objExpr.addTerm(1.0, theta);
+
         model.setObjective(objExpr, GRB.MINIMIZE);
         model.update();
-        System.out.println("第一阶段目标函数设置完成");
+        System.out.println("第一阶段目标函数（含θ）设置完成");
     }
 
     /**
@@ -340,7 +421,7 @@ public class FirstStageLocationModel {
 
             // 输出详细信息（根据outputFlag控制）
             if (outputFlag) {
-                outputAllDecisionVariables();
+                //outputAllDecisionVariables();
             }
 
             // 生成选址结果（传递给第二阶段）

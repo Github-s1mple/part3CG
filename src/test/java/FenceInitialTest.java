@@ -16,9 +16,9 @@ public class FenceInitialTest {
         List<double[]> depotMap;
         depotMap = MapDistance.initialDepotMap();
         ArrayList<Fence> fenceList;
-        fenceList = initializer.fenceInitializer(distanceMatrix);
+        fenceList = initializer.fenceInitializer(distanceMatrix, null);
         ArrayList<Depot> depotList;
-        depotList = initializer.depotInitializer(depotMap);
+        depotList = initializer.depotInitializer(depotMap, null);
         System.out.println("测试完毕");
     }
 }

@@ -16,7 +16,6 @@ public class Fence {
     private Double lat;
     private Double totalDemand;
     private Double selfDemand;
-    private Double depotDemand;
     private Double deliverDemand;
     private Double originalFenceValue;
     private HashMap<Integer, Double> distanceMap;
@@ -28,13 +27,12 @@ public class Fence {
     private String constName;
     private Boolean isFakeFence;
 
-    public Fence(Integer index, Double Lon, Double Lat, Double totalDemand, Double selfDemand, Double depotDemand, Double deliverDemand, Double unitPrice, Boolean isFakeFence) {
+    public Fence(Integer index, Double Lon, Double Lat, Double totalDemand, Double selfDemand, Double deliverDemand, Double unitPrice, Boolean isFakeFence) {
         this.index = index;
         this.lon = Lon;
         this.lat = Lat;
         this.totalDemand = totalDemand;
         this.selfDemand = selfDemand;
-        this.depotDemand = depotDemand;
         this.deliverDemand = deliverDemand;
         this.distanceMap = new HashMap<>();
         this.constName = "F" + index;

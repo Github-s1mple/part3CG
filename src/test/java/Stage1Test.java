@@ -1,11 +1,8 @@
-import baseinfo.Constants;
 import com.gurobi.gurobi.GRBException;
 import impl.*;
-import stage1.FirstStageLocationModel;
+import Stages.FirstStageLocationModel;
 
 import java.io.IOException;
-import java.util.List;
-import java.util.Map;
 
 public class Stage1Test {
     public static void main(String[] args) throws GRBException, IOException {

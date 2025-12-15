@@ -8,6 +8,7 @@ import com.gurobi.gurobi.GRBException;
 import com.gurobi.gurobi.GRBLinExpr;
 import com.gurobi.gurobi.GRBModel;
 import com.gurobi.gurobi.GRBVar;
+import lombok.Getter;
 import lombok.Setter;
 
 import java.util.ArrayList;
@@ -15,7 +16,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Collections;
-
+@Setter
+@Getter
 public class RLMPSolve {
     // 输入参数：列生成的最终结果（所有生成的订单）、问题实例
     private final List<Order> finalColumns;
@@ -23,7 +25,6 @@ public class RLMPSolve {
     private final Fences fences;
     private GRBEnv env;
     private GRBModel finalModel;
-    @Setter
     private int timeLimit = 600; // 默认10分钟
 
     // 输出结果：最优订单、总收益
@@ -34,6 +35,7 @@ public class RLMPSolve {
     private Map<String, Order> idToOrderMap; // 订单ID→Order对象
     private Map<Integer, List<Order>> fenceToOrdersMap; // 围栏索引→关联订单列表
     private Map<String, List<Order>> carrierToOrdersMap; // 载具索引→关联订单列表
+    private Map<String, Double> dualVariables;  // 对偶变量映射（约束名→对偶值）
 
     public RLMPSolve(List<Order> finalColumns, Instance instance) {
         this.finalColumns = finalColumns;
@@ -95,6 +97,15 @@ public class RLMPSolve {
         // 5. 释放资源
         releaseResource();
 
+        // 求解完成后，提取目标值
+        this.totalProfit = finalModel.get(GRB.DoubleAttr.ObjVal);
+
+        // 提取对偶变量（约束的Pi属性）
+        this.dualVariables = new HashMap<>();
+        for (GRBConstr constr : finalModel.getConstrs()) {
+            String constrName = constr.get(GRB.StringAttr.ConstrName);
+            dualVariables.put(constrName, constr.get(GRB.DoubleAttr.Pi));
+        }
         return optimalOrders;
     }
 
