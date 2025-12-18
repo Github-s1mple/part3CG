@@ -65,7 +65,7 @@ public class LoadingAlgorithm {
     private void chooseCarrier(Route route) {
         Integer depotIndex = route.getDepot();
         for (Carrier carrier : carriers.getCarrierList()) {
-            if (Objects.equals(carrier.getDepot(), -depotIndex)){
+            if (Objects.equals(carrier.getDepot(), depotIndex)){
                 chosenCarrier = carrier;
                 return;
             }

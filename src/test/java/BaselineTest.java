@@ -12,7 +12,7 @@ public class BaselineTest {
     public static void main(String[] args) {
         try {
             // 1. 初始化问题实例
-            Constants.ALGO_MODE = "baseline";
+            Constants.ALGO_MODE = "CG";
             Instance instance = new Instance();
             // 2. 创建求解器并初始化
             GurobiSolve solver = new GurobiSolve(instance);

@@ -11,8 +11,8 @@ public class CGTest {
     public static void main(String[] args) {
         Constants.ALGO_MODE = "CG";
         Instance instance = new Instance();
-        CGSolve cgSolve = new CGSolve();
-        List<Order> optimalOrders = cgSolve.solve(instance);
+        CGSolve cgSolve = new CGSolve(instance);
+        List<Order> optimalOrders = cgSolve.solve();
         Orders orders = new Orders(optimalOrders);
         ResultProcess resultProcess = new ResultProcess(orders);
         resultProcess.showOrderDetail();

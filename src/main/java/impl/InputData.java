@@ -30,19 +30,19 @@ public class InputData {
     // 候选点i的固定成本f_i
     public Map<Integer, Double> fixedCost;
 
-    public InputData() throws IOException {
-        distanceMatrix = MapDistance.initialDistanceMatrix();
+    public InputData(Boolean initialSolution) throws IOException {
+        distanceMatrix = MapDistance.initialDistanceMatrix(null);
         List<double []> candidateMap = MapDistance.initialCandidateMap();
         fences = new Fences();
         candidates = new Candidates();
         initializer = new Initializer();
         candidates.setCandidateList(initializer.candidateInitializer(candidateMap));
-        fences.setFenceList(initializer.fenceInitializer(distanceMatrix, null));
+        fences.setFenceList(initializer.fenceInitializer(distanceMatrix, null, null));
         fences.generateFenceIndexList();
         candidates.generateCandidateIndexList();
         candidateDistanceMatrix = candidates.generateCandidateDistanceMatrix();
         initialOj = new HashMap<>();
-        if(Constants.START_WITH_INITIALSOLUTION) generateInitialSolution();
+        if(initialSolution) generateInitialSolution();
     }
 
     public void generateInitialSolution() throws IOException {
@@ -96,5 +96,6 @@ public class InputData {
         }
 
         setInitialOj(fixedOValues);
+        System.out.printf("已固定初始解，初始解：" + fixedOValues);
     }
 }

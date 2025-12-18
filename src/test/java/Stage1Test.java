@@ -7,7 +7,7 @@ import java.io.IOException;
 public class Stage1Test {
     public static void main(String[] args) throws GRBException, IOException {
         // 1. 构造测试输入数据（替换为你的实际数据）
-        InputData input = new InputData();
+        InputData input = new InputData(true);
         // 2. 初始化并构建模型
         FirstStageLocationModel model = new FirstStageLocationModel(input);
         model.setOutputFlag(true);  // 开启详细输出

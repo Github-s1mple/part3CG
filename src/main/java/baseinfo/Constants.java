@@ -5,7 +5,8 @@ public class Constants {
     public static final Integer MAX_VISIT_NUM = 8; //必须设置为偶数
     public static final Double TRUCK_MAX_DISTANCE = 3.0; //千米
     public static final Double BIKE_MAX_DISTANCE = 8.0; //千米
-    public static final Double DELIVER_COST_PER_METER = 0.0005;
+    public static final Double TRUCK_COST_PER_METER = 0.0005;
+    public static final Double BIKE_COST_PER_METER = 0.005;
     public static final Double MAX_CAPACITY = 16.0;
     public static final Double MIN_CARRIER_LOAD = 5.0;
     public static final double DISTANCE_TO_NEAREST_FENCE = 1; //围栏初始价值定义方式：与最近仓库的距离 * 系数
@@ -14,10 +15,10 @@ public class Constants {
     public static final Double OBJ_LB = 0.0;
     public static final double EARTH_RADIUS = 6371.0;
     public static final Integer CARRY_MAX_USE_TIMES = 1;
-    public static final Boolean IS_DIFFERENT_CARRIER = false;
 
     // 算法模式
-    public static String ALGO_MODE = "CG"; //"CG"是使用完整数据进行测试
+    public static String ALGO_MODE = "single scenario";
+    //public static String ALGO_MODE = "multi scenario";
 
     // 完整数据的文件路径
     public static final String allPointsFilePath = "all_points.xlsx";
@@ -35,4 +36,8 @@ public class Constants {
     public static final Integer OUTPUT_INTERVAL = 1000;
     public static final Integer ITERATION_COLUMN_NUM = 1000; //每轮生成的列数（对偶值更新频率）
     public static final Boolean START_WITH_INITIALSOLUTION = true;//用初始解启动
+
+    // LShaped算法控制参数
+    public static final Integer MAX_ITER = 20; // 最大迭代次数
+    public static final Double GAP_THRESHOLD = 1e-4;
 }

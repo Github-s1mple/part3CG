@@ -14,6 +14,7 @@ import java.util.List;
 @Setter
 @Getter
 public class Instance {
+    private final Integer index;
     private ArrayList<Order> orderList;
     private Fences fences;
     private Carriers carriers;
@@ -24,39 +25,62 @@ public class Instance {
     private List<HashMap<Integer, Double>> depotDistanceMatrix;
     private Initializer initializer;
     private Scenario scenario;
+    private double scenarioProbability;
 
     public Instance() {
-        distanceMatrix = MapDistance.initialDistanceMatrix();
+        index = 0;
+        distanceMatrix = MapDistance.initialDistanceMatrix(null);
         List<double []> depotMap = MapDistance.initialDepotMap();
         fences = new Fences();
         depots = new Depots();
         carriers = new Carriers();
         initializer = new Initializer();
         depots.setDepotList(initializer.depotInitializer(depotMap, null));
-        fences.setFenceList(initializer.fenceInitializer(distanceMatrix, null));
+        fences.setFenceList(initializer.fenceInitializer(distanceMatrix, null, null));
         fences.generateFenceIndexList();
         depots.generateDepotIndexList();
         depotDistanceMatrix = depots.generateDepotDistanceMatrix();
-        carrierList = initializer.carrierInitializer(Constants.IS_DIFFERENT_CARRIER);
+        carrierList = initializer.carrierInitializer();
         carriers.setCarrierList(carrierList);
         orderList = null;
     }
 
     public Instance(LocationResult result) {
-        distanceMatrix = MapDistance.initialDistanceMatrix();
+        index = 0;
+        distanceMatrix = MapDistance.initialDistanceMatrix(null);
         List<double []> depotMap = MapDistance.initialDepotMap();
         fences = new Fences();
         depots = new Depots();
         carriers = new Carriers();
         initializer = new Initializer();
         depots.setDepotList(initializer.depotInitializer(depotMap, result));
-        fences.setFenceList(initializer.fenceInitializer(distanceMatrix, result));
+        fences.setFenceList(initializer.fenceInitializer(distanceMatrix, result, null));
         fences.generateFenceIndexList();
         depots.generateDepotIndexList();
         depotDistanceMatrix = depots.generateDepotDistanceMatrix();
 
-        carrierList = initializer.carrierInitializer(Constants.IS_DIFFERENT_CARRIER);
+        carrierList = initializer.carrierInitializer();
         carriers.setCarrierList(carrierList);
         orderList = null;
+    }
+
+    public Instance(LocationResult result, Scenario scenario) {
+        this.index = scenario.getId();
+        distanceMatrix = MapDistance.initialDistanceMatrix(scenario);
+        List<double []> depotMap = MapDistance.initialDepotMap();
+        fences = new Fences();
+        depots = new Depots();
+        carriers = new Carriers();
+        initializer = new Initializer();
+        depots.setDepotList(initializer.depotInitializer(depotMap, result));
+        fences.setFenceList(initializer.fenceInitializer(distanceMatrix, result, scenario));
+        fences.generateFenceIndexList();
+        depots.generateDepotIndexList();
+        depotDistanceMatrix = depots.generateDepotDistanceMatrix();
+        carrierList = initializer.carrierInitializer();
+        carriers.setCarrierList(carrierList);
+        orderList = null;
+        this.scenario = scenario;
+        this.scenarioProbability = scenario.getProbability();
     }
 }

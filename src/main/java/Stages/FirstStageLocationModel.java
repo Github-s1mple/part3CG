@@ -12,8 +12,8 @@ import java.text.DecimalFormat;
 import static Utils.GurobiUtils.getStatusDescription;
 
 /**
- * 第一阶段选址模型：对应数学模型(3.1)-(3.9)
- * 核心功能：确定候选配送中心的选址方案及栅格额外需求的分配策略
+ * 第一阶段选址模型（集成Benders割平面θ变量）
+ * 核心功能：确定候选配送中心的选址方案及栅格配送需求的分配策略 + 第二阶段成本期望θ
  */
 @Setter
 @Getter
@@ -22,7 +22,7 @@ public class FirstStageLocationModel {
     private final InputData input;
     private final Candidates candidates;
     private final Fences fences;
-    private final List<HashMap<Integer, Double>> depotToFenceDist;  // 候选点到栅格的距离矩阵
+    private final List<HashMap<Integer, Double>> candidateToFenceDist;  // 候选点到栅格的距离矩阵
     // Gurobi核心对象
     private GRBEnv env;         // Gurobi环境
     private GRBModel model;     // Gurobi模型实例
@@ -34,8 +34,8 @@ public class FirstStageLocationModel {
     private int candidatesNum;  // 候选配送中心数量
     private int fencesNum;       // 栅格数量
     // 集合定义（统一ID管理，与数学模型保持一致）
-    private Set<Integer> C;     // 候选点集合（C = candidate IDs）
-    private Set<Integer> N;     // 栅格集合（N = fence IDs，原注释G为笔误）
+    private Set<Integer> C;     // 候选点集合
+    private Set<Integer> N;     // 栅格集合
     // 格式化输出（保留2位小数，与第二阶段格式统一）
     private final DecimalFormat df = new DecimalFormat("0.00");
     // 输出开关（控制日志详细程度：true输出详细日志，false仅输出关键信息）
@@ -44,7 +44,8 @@ public class FirstStageLocationModel {
     private double totalTimeSec;
     // 存储固定的O_i取值（key=候选点ID，value=0或1，为空表示不固定）
     private Map<Integer, Integer> fixedOValues;
-    private GRBVar theta;  // 第二阶段期望成本下界变量
+    private GRBVar theta;  // 第二阶段期望成本下界变量（核心新增）
+    private double totalCost;
 
     /**
      * 构造函数：初始化输入数据、问题维度及Gurobi环境
@@ -58,10 +59,10 @@ public class FirstStageLocationModel {
         // 初始化问题维度参数
         this.candidatesNum = input.getCandidates().size();
         this.fencesNum = input.getFences().size();
-        this.depotToFenceDist = input.getCandidateDistanceMatrix();
+        this.candidateToFenceDist = input.getCandidateDistanceMatrix();
         // 初始化集合（统一ID管理，与第二阶段保持一致）
         this.C = new HashSet<>(this.candidates.getCandidateIndexes());  // 候选点ID集合
-        this.N = new HashSet<>(this.fences.getFenceIndexList());         // 栅格ID集合（修正原注释G为N）
+        this.N = new HashSet<>(this.fences.getFenceIndexList());         // 栅格ID集合
         this.fixedOValues = input.getInitialOj();
         // 初始化变量/约束缓存（统一管理，便于后续查询和修改）
         this.varMap = new HashMap<>();
@@ -81,84 +82,7 @@ public class FirstStageLocationModel {
 
 
     /**
-     * 扩展变量定义：添加θ变量（L形法核心）
-     */
-    public void defineVariablesWithTheta() throws GRBException {
-        // 先定义原有变量（O_i和Xs_ij）
-        defineVariables();
-
-        // 添加θ变量（初始下界设为-无穷，用一个极小值替代）
-        String thetaName = "Theta";
-        this.theta = model.addVar(
-                -1e18,  // 下界：允许负（但实际第二阶段成本非负，后续会修正）
-                1e18,   // 上界：大常数
-                1.0,    // 目标系数：在目标函数中θ的系数为1（min c^T x + θ）
-                GRB.CONTINUOUS,
-                thetaName
-        );
-        varMap.put(thetaName, theta);
-        model.update();
-        System.out.println("已添加θ变量（第二阶段期望成本下界）");
-    }
-
-    /**
-     * 添加最优性割平面：θ ≥ Σp_s [Q_s(x^k) + π_s^T T_s (x - x^k)]
-     * @param cutExpr 割平面的线性表达式（含x变量和常数项）
-     */
-    public void addOptimalityCut(GRBLinExpr cutExpr) throws GRBException {
-        String cutName = String.format("OptimalityCut_%d", constrMap.size() + 1);
-        // 约束：theta >= cutExpr（cutExpr中已包含x的线性项和常数项）
-        model.addConstr(theta, GRB.GREATER_EQUAL, cutExpr, cutName);
-        constrMap.put(cutName, model.getConstrByName(cutName));
-        model.update();
-        System.out.println("已添加最优性割平面：" + cutName);
-    }
-
-    /**
-     * 添加可行性割平面：σ_s^T T_s x ≤ σ_s^T h_s
-     * @param cutExpr 割平面的线性表达式（含x变量）
-     * @param rhs 右端项
-     */
-    public void addFeasibilityCut(GRBLinExpr cutExpr, double rhs) throws GRBException {
-        String cutName = String.format("FeasibilityCut_%d", constrMap.size() + 1);
-        model.addConstr(cutExpr, GRB.LESS_EQUAL, rhs, cutName);
-        constrMap.put(cutName, model.getConstrByName(cutName));
-        model.update();
-        System.out.println("已添加可行性割平面：" + cutName);
-    }
-
-    /**
-     * 获取当前第一阶段解x^k（O_i和Xs_ij的取值）
-     */
-    public Map<String, Double> getCurrentSolution() throws GRBException {
-        Map<String, Double> solution = new HashMap<>();
-        // 收集O_i的取值
-        for (int i : C) {
-            String varName = String.format("O_%d", i);
-            solution.put(varName, varMap.get(varName).get(GRB.DoubleAttr.X));
-        }
-        // 收集Xs_ij的取值
-        for (int i : N) {
-            for (int j : C) {
-                String varName = String.format("Xs_%d_%d", i, j);
-                solution.put(varName, varMap.get(varName).get(GRB.DoubleAttr.X));
-            }
-        }
-        // 收集theta的取值
-        solution.put("Theta", theta.get(GRB.DoubleAttr.X));
-        return solution;
-    }
-
-    /**
-     * 重置模型求解状态（用于迭代）
-     */
-    public void resetModel() throws GRBException {
-        model.reset();
-    }
-
-
-    /**
-     * 定义所有决策变量（对应原模型O_i、Xs_ij）
+     * 定义所有决策变量（对应原模型O_i、Xs_ij + 新增θ）
      * 变量命名规范：采用"变量类型_索引1_索引2"格式，便于调试和对接第二阶段
      * @throws GRBException 变量添加过程可能抛出的异常
      */
@@ -169,7 +93,7 @@ public class FirstStageLocationModel {
             String varName = String.format("O_%d", i);
             GRBVar var;
 
-            // 检查是否需要固定当前O_i的值（新增逻辑）
+            // 检查是否需要固定当前O_i的值
             Integer fixedValue = fixedOValues.get(i);
             if (fixedValue != null) {
                 // 固定为已知值：上下界设为fixedValue，变量类型改为连续型（实际为常数）
@@ -192,14 +116,14 @@ public class FirstStageLocationModel {
             varMap.put(varName, var);
         }
 
-        // 2. Xs_ij：栅格i的额外需求是否分配给候选点j（0-1变量，1=分配，0=不分配）
-        // 命名规范：Xs_栅格ID_候选点ID（原注释"栅格i"修正为"栅格i"，"候选点j"明确索引含义）
+        // 2. Xs_ij：栅格i的配送需求是否分配给候选点j（0-1变量，1=分配，0=不分配）
+        // 命名规范：Xs_栅格ID_候选点ID
         for (int i : N) {
             for (int j : C) {
                 String varName = String.format("Xs_%d_%d", i, j);
                 GRBVar var = model.addVar(
                         0.0, 1.0,                // 变量上下界（0-1）
-                        0.0,                      // 目标系数：额外分配无直接成本（成本在第二阶段体现）
+                        0.0,                      // 目标系数：配送分配无直接成本（成本在第二阶段体现）
                         GRB.BINARY,               // 变量类型（二进制）
                         varName                   // 变量名
                 );
@@ -207,20 +131,31 @@ public class FirstStageLocationModel {
             }
         }
 
-        // 变量定义完成后更新模型（使变量生效）
+        // 3. θ变量（第二阶段期望成本下界）
+        // 命名规范：Theta_SecondStageCost
+        theta = model.addVar(
+                0.0, GRB.INFINITY,  // 下界0，上界无穷（成本非负）
+                1.0,                // 目标系数：1.0（目标函数=固定成本+θ）
+                GRB.CONTINUOUS,     // 连续变量
+                "Theta_SecondStageCost"
+        );
+        varMap.put("Theta_SecondStageCost", theta);
+        System.out.println("已添加第二阶段成本下界变量θ");
+
+        // 变量定义完成后更新模型
         model.update();
-        System.out.printf("第一阶段变量定义完成：共%d个变量%n", varMap.size());
+        System.out.printf("第一阶段变量定义完成：共%d个变量（含θ）%n", varMap.size());
     }
 
     /**
-     * 设置目标函数（原模型3.1）：最小化候选点固定成本与第二阶段期望成本之和
-     * 注：第二阶段成本期望通过Benders割平面后续添加，此处仅包含固定成本项
+     * 设置目标函数：最小化候选点固定成本与第二阶段期望成本之和
+     * 数学表达：min Σ(f_i·O_i) + θ
      * @throws GRBException 目标函数设置可能抛出的异常
      */
     public void setObjective() throws GRBException {
         GRBLinExpr objExpr = new GRBLinExpr();
 
-        // 原有固定成本项：Σf_i·O_i
+        // 1. 固定成本项：Σf_i·O_i
         for (int i : C) {
             String varName = String.format("O_%d", i);
             GRBVar var = varMap.get(varName);
@@ -228,12 +163,30 @@ public class FirstStageLocationModel {
             objExpr.addTerm(buildCost, var);
         }
 
-        // 添加θ项：目标函数为 min (固定成本 + θ)
+        // 2. 骑手配送成本项
+        double unitTransCost = Constants.BIKE_COST_PER_METER; // 单位距离运输成本（元/米）
+        for (int i : N) {
+            Fence fence = fences.getFence(i);
+            double bikeDemand = fence.getBikeDemand();
+            for (int j : C) {
+                String xName = String.format("Xs_%d_%d", i, j);
+                GRBVar xVar = varMap.get(xName);
+                if (xVar == null) continue;
+
+                // 计算路径i→j的距离（米）
+                HashMap<Integer, Double> distMap = candidateToFenceDist.get(- j - 1);
+                double dist = distMap.get(i - 1) * 1000; // 千米转米
+                objExpr.addTerm(bikeDemand * unitTransCost * dist, xVar);
+            }
+        }
+
+        // 3. 第二阶段成本项：θ
         objExpr.addTerm(1.0, theta);
 
+        // 设置最小化目标
         model.setObjective(objExpr, GRB.MINIMIZE);
         model.update();
-        System.out.println("第一阶段目标函数（含θ）设置完成");
+        System.out.println("第一阶段目标函数设置完成");
     }
 
     /**
@@ -245,13 +198,13 @@ public class FirstStageLocationModel {
         // 1. 最大配送距离约束（限制超出服务范围的分配）
         addMaxDistanceConstraints();
 
-        // 2. 额外需求唯一分配约束（原约束3.4）
+        // 2. 配送需求唯一分配约束（原约束3.4）
         addExtraDemandUniqueAllocationConstraints();
 
-        // 3. 额外需求特殊约束（原约束3.5，确保分配给最近候选点）
+        // 3. 配送需求特殊约束（原约束3.5，确保分配给最近候选点）
         addExtraDemandSpecialConstraints();
 
-        // 4. 额外需求分配-选址关联约束（原约束3.6，确保仅分配给已选中的候选点）
+        // 4. 配送需求分配-选址关联约束（原约束3.6，确保仅分配给已选中的候选点）
         addExtraAllocationLocationLinkConstraints();
 
         model.update();  // 更新模型使约束生效
@@ -259,9 +212,9 @@ public class FirstStageLocationModel {
     }
 
     /**
-     * 约束3.4：额外需求唯一分配约束
+     * 约束3.4：配送需求唯一分配约束
      * 数学表达：∀i∈N，Σ(j∈C) Xs_ij = 1
-     * 含义：每个栅格的额外需求必须且只能分配给一个候选点
+     * 含义：每个栅格的配送需求必须且只能分配给一个候选点
      * @throws GRBException 约束添加可能抛出的异常
      */
     private void addExtraDemandUniqueAllocationConstraints() throws GRBException {
@@ -281,9 +234,9 @@ public class FirstStageLocationModel {
     }
 
     /**
-     * 约束3.5：额外需求特殊约束（最近候选点优先分配）
+     * 约束3.5：配送需求特殊约束（最近候选点优先分配）
      * 数学表达：∀i∈N，∀m∈C，∀n∈C（n比m更近于i），Xs_im + O_n ≤ 1
-     * 含义：若候选点n比m更近于栅格i，且n被选中，则i的额外需求不能分配给m
+     * 含义：若候选点n比m更近于栅格i，且n被选中，则i的配送需求不能分配给m
      * @throws GRBException 约束添加可能抛出的异常
      */
     private void addExtraDemandSpecialConstraints() throws GRBException {
@@ -296,15 +249,15 @@ public class FirstStageLocationModel {
                     // 获取候选点m和n到栅格i的距离（转换为米，确保单位一致）
                     int depotMIdx = -m - 1;  // 距离矩阵中m的索引（业务约定格式）
                     int depotNIdx = -n - 1;  // 距离矩阵中n的索引（业务约定格式）
-                    HashMap<Integer, Double> distMMap = depotToFenceDist.get(depotMIdx);
-                    HashMap<Integer, Double> distNMap = depotToFenceDist.get(depotNIdx);
+                    HashMap<Integer, Double> distMMap = candidateToFenceDist.get(depotMIdx);
+                    HashMap<Integer, Double> distNMap = candidateToFenceDist.get(depotNIdx);
                     double distM = distMMap.get(i) * 1000;  // 转换为米
                     double distN = distNMap.get(i) * 1000;  // 转换为米
 
                     // 若n比m严格更近（排除距离相等的情况，避免冗余约束）
                     if (distN < distM - 1e-6) {
                         GRBLinExpr expr = new GRBLinExpr();
-                        // 添加Xs_im变量（系数1.0）：表示i的额外需求是否分配给m
+                        // 添加Xs_im变量（系数1.0）：表示i的配送需求是否分配给m
                         String xsVarName = String.format("Xs_%d_%d", i, m);
                         expr.addTerm(1.0, varMap.get(xsVarName));
                         // 添加O_n变量（系数1.0）：表示n是否被选中
@@ -322,9 +275,9 @@ public class FirstStageLocationModel {
     }
 
     /**
-     * 约束3.6：额外需求分配-选址关联约束
+     * 约束3.6：配送需求分配-选址关联约束
      * 数学表达：∀i∈N，∀j∈C，Xs_ij ≤ O_j
-     * 含义：栅格i的额外需求只能分配给已选中的候选点j（O_j=1时Xs_ij才可能为1）
+     * 含义：栅格i的配送需求只能分配给已选中的候选点j（O_j=1时Xs_ij才可能为1）
      * @throws GRBException 约束添加可能抛出的异常
      */
     private void addExtraAllocationLocationLinkConstraints() throws GRBException {
@@ -333,7 +286,7 @@ public class FirstStageLocationModel {
                 String constrName = String.format("ExtraAllocLink_i%d_j%d", i, j);  // 约束名：分配关联_栅格i_候选点j
                 GRBLinExpr expr = new GRBLinExpr();
 
-                // 获取变量：Xs_ij（i的额外需求分配给j）和O_j（j是否被选中）
+                // 获取变量：Xs_ij（i的配送需求分配给j）和O_j（j是否被选中）
                 String xsVarName = String.format("Xs_%d_%d", i, j);
                 String oVarName = String.format("O_%d", j);
                 expr.addTerm(1.0, varMap.get(xsVarName));   // +Xs_ij
@@ -349,7 +302,7 @@ public class FirstStageLocationModel {
     /**
      * 最大配送距离约束（对应业务规则：超出最大服务距离的候选点不能分配需求）
      * 数学表达：∀i∈N，∀j∈C，若d_ij > 最大服务距离，则Xs_ij = 0
-     * 含义：栅格i的额外需求不能分配给距离超过最大服务范围的候选点j
+     * 含义：栅格i的配送需求不能分配给距离超过最大服务范围的候选点j
      * @throws GRBException 约束添加可能抛出的异常
      */
     private void addMaxDistanceConstraints() throws GRBException {
@@ -357,7 +310,7 @@ public class FirstStageLocationModel {
             for (int j : C) {  // 遍历每个候选点j
                 // 获取候选点j到栅格i的距离（单位：原单位，与Constants中阈值单位一致）
                 int depotIdx = -j - 1;  // 距离矩阵中j的索引（业务约定格式）
-                HashMap<Integer, Double> distMap = depotToFenceDist.get(depotIdx);
+                HashMap<Integer, Double> distMap = candidateToFenceDist.get(depotIdx);
                 double d_ij = distMap.get(i);
 
                 // 若距离超过最大服务距离（附加微小误差避免浮点比较问题）
@@ -372,6 +325,18 @@ public class FirstStageLocationModel {
         }
     }
 
+    /**
+     * 新增：添加Benders割平面约束
+     * @param cutExpr 割平面表达式（θ ≥ Σπ_j·O_j）
+     * @param cutName 割平面名称
+     * @throws GRBException 约束添加异常
+     */
+    public void addBendersCut(GRBLinExpr cutExpr, String cutName) throws GRBException {
+        GRBConstr cutConstr = model.addConstr(theta, GRB.GREATER_EQUAL, cutExpr, cutName);
+        constrMap.put(cutName, cutConstr);
+        model.update();
+        System.out.println("已添加Benders割平面：" + cutName);
+    }
 
     /**
      * 求解模型并返回选址结果（对接第二阶段的核心方法）
@@ -380,7 +345,7 @@ public class FirstStageLocationModel {
         // 记录求解开始时间
         long startTime = System.currentTimeMillis();
         System.out.println("========================================");
-        System.out.println("开始求解第一阶段选址模型......");
+        System.out.println("开始求解第一阶段选址模型（含Benders割平面）......");
         // 输出固定O_i的信息
         if (!fixedOValues.isEmpty()) {
             System.out.println("当前模式：固定O_i取值，求解其他变量");
@@ -400,7 +365,6 @@ public class FirstStageLocationModel {
 
             // 无可行解时，输出冲突约束分析
             if (status == GRB.Status.INFEASIBLE) {
-                //printConflictConstraints();
                 System.err.println("第一阶段模型无可行解，已输出冲突约束");
                 return null;
             }
@@ -412,16 +376,16 @@ public class FirstStageLocationModel {
             }
 
             // 输出求解结果摘要
-            double totalFixedCost = model.get(GRB.DoubleAttr.ObjVal);
+            this.totalCost = model.get(GRB.DoubleAttr.ObjVal);
             System.out.println("\n【第一阶段最优结果摘要】");
             System.out.println("========================================");
-            System.out.println("最优总固定成本：" + df.format(totalFixedCost) + " 元");
+            System.out.println("最优总成本：" + df.format(totalCost) + " 元（第二阶段期望成本：" + df.format(theta.get(GRB.DoubleAttr.X)) + "）");
             System.out.println("选中的候选点数量：" + countSelectedCandidates());
             System.out.println("========================================");
 
             // 输出详细信息（根据outputFlag控制）
             if (outputFlag) {
-                //outputAllDecisionVariables();
+                outputAllDecisionVariables();
             }
 
             // 生成选址结果（传递给第二阶段）
@@ -435,8 +399,9 @@ public class FirstStageLocationModel {
             System.out.printf("总耗时：%s 秒%n", df.format(totalTimeSec));
 
             // 释放Gurobi资源（避免内存泄漏）
-            model.dispose();
-            env.dispose();
+            // 注意：迭代过程中不释放，仅在最终求解完成后释放
+            // model.dispose();
+            // env.dispose();
         }
     }
 
@@ -457,7 +422,7 @@ public class FirstStageLocationModel {
         }
         result.setSelectedCandidates(selectedCandidates);
 
-        // 3. 提取额外需求分配结果（Xs_ij=1）
+        // 2. 提取配送需求分配结果（Xs_ij=1）
         Map<Integer, Integer> extraAllocation = new HashMap<>();
         for (int i : N) {
             for (int j : C) {
@@ -470,6 +435,9 @@ public class FirstStageLocationModel {
             }
         }
         result.setExtraAllocation(extraAllocation);
+
+        // 3. 提取当前θ值（传递给第二阶段）
+        result.setTheta(theta.get(GRB.DoubleAttr.X));
 
         return result;
     }
@@ -492,9 +460,12 @@ public class FirstStageLocationModel {
                     i, df.format(val), val > 0.5 ? "选中" : "未选中");
         }
 
+        // 2. 输出θ：第二阶段期望成本
+        System.out.println("\n2. 第二阶段期望成本变量 θ = " + df.format(theta.get(GRB.DoubleAttr.X)) + " 元");
+        System.out.println("----------------------------------------");
 
-        // 3. 输出Xs_ij：额外需求分配变量
-        System.out.println("\n3. 额外需求分配变量 Xs_ij（Xs_栅格ID_候选点ID = 取值）");
+        // 3. 输出Xs_ij：配送需求分配变量
+        System.out.println("\n3. 配送需求分配变量 Xs_ij（Xs_栅格ID_候选点ID = 取值）");
         System.out.println("----------------------------------------");
         for (int i : N) {
             for (int j : C) {
@@ -502,7 +473,7 @@ public class FirstStageLocationModel {
                 GRBVar var = varMap.get(varName);
                 double val = var.get(GRB.DoubleAttr.X);
                 if (val > 0.5) {
-                    System.out.printf("Xs_%d_%d = %s （栅格%d额外需求分配给候选点%d）%n",
+                    System.out.printf("Xs_%d_%d = %s （栅格%d配送配送需求分配给候选点%d）%n",
                             i, j, df.format(val), i, j);
                 }
             }
@@ -523,5 +494,101 @@ public class FirstStageLocationModel {
             }
         }
         return count;
+    }
+
+    /**
+     * 释放Gurobi资源（迭代结束后调用）
+     */
+    public void releaseResources() throws GRBException {
+        if (model != null) model.dispose();
+        if (env != null) env.dispose();
+        System.out.println("第一阶段Gurobi资源已释放");
+    }
+
+
+    private boolean isFirstIter = true;
+
+    /**
+     * 迭代更新：更新fixedOValues为当前最优解，并重新初始化模型
+     * @param newFixedOValues 新的固定O_i解
+     * @throws GRBException Gurobi异常
+     */
+    public void updateFixedOValues(Map<Integer, Integer> newFixedOValues) throws GRBException {
+        // 1. 更新固定解
+        this.fixedOValues = newFixedOValues;
+        this.isFirstIter = false;
+
+        // 2. 重新初始化模型（释放旧模型+重建）
+        if (model != null) model.dispose();
+        if (env != null) env.dispose();
+
+        this.env = new GRBEnv();
+        this.model = new GRBModel(env);
+        // 复用原有参数设置
+        model.set(GRB.IntParam.OutputFlag, outputFlag ? 1 : 0);
+        model.set(GRB.DoubleParam.FeasibilityTol, 1e-5);
+        model.set(GRB.IntParam.Presolve, 1);
+        model.set(GRB.DoubleParam.MIPGap, 0.01);
+        model.set(GRB.StringParam.LogFile, "first_stage_iter.log");
+
+        // 3. 重新构建模型（变量+约束+目标）
+        defineVariables();
+        setObjective();
+        addCoreConstraints();
+        model.update();
+
+        System.out.println("第一阶段模型已更新固定解，当前固定O_i数量：" + fixedOValues.size());
+    }
+
+    /**
+     * 提取当前最优的O_i解（用于迭代更新）
+     * @return key=候选点ID，value=0/1
+     * @throws GRBException Gurobi异常
+     */
+    public Map<Integer, Integer> getCurrentOSolution() throws GRBException {
+        Map<Integer, Integer> currentOSol = new HashMap<>();
+        for (int i : C) {
+            String varName = String.format("O_%d", i);
+            GRBVar var = varMap.get(varName);
+            double val = var.get(GRB.DoubleAttr.X);
+            currentOSol.put(i, val > 1e-6 ? 1 : 0);
+        }
+        return currentOSol;
+    }
+
+
+    /**
+     * 重载solve方法：迭代模式下不释放资源（仅最终释放）
+     */
+    public LocationResult solveIter() throws GRBException {
+        long startTime = System.currentTimeMillis();
+        try {
+            model.optimize();
+
+            int status = model.get(GRB.IntAttr.Status);
+            System.out.println("求解状态：" + getStatusDescription(status));
+
+            if (status == GRB.Status.INFEASIBLE) {
+                System.err.println("第一阶段模型无可行解");
+                return null;
+            }
+
+            if (status != GRB.Status.OPTIMAL && status != GRB.Status.SUBOPTIMAL) {
+                System.err.println("未找到最优解或可行解");
+                return null;
+            }
+
+            // 输出迭代结果
+            double totalCost = model.get(GRB.DoubleAttr.ObjVal);
+            System.out.println("\n【迭代求解结果】");
+            System.out.println("总成本：" + df.format(totalCost) + " 元（第二阶段成本：" + df.format(theta.get(GRB.DoubleAttr.X)) + "）");
+            System.out.println("选中候选点数量：" + countSelectedCandidates());
+
+            return generateLocationResult();
+        } finally {
+            totalTimeSec = (System.currentTimeMillis() - startTime) / 1000.0;
+            System.out.printf("迭代求解耗时：%s 秒%n", df.format(totalTimeSec));
+            // 迭代模式下不释放资源！
+        }
     }
 }

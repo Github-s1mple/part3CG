@@ -3,6 +3,7 @@ package impl;
 import baseinfo.Constants;
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.xmlbeans.impl.tool.XsbDumper;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -17,6 +18,7 @@ public class Fence {
     private Double totalDemand;
     private Double selfDemand;
     private Double deliverDemand;
+    private Double bikeDemand;
     private Double originalFenceValue;
     private HashMap<Integer, Double> distanceMap;
     private double fenceValue;
@@ -26,14 +28,13 @@ public class Fence {
     private double nearestDiffLabelDist;
     private String constName;
     private Boolean isFakeFence;
+    private Depot Xs;
 
-    public Fence(Integer index, Double Lon, Double Lat, Double totalDemand, Double selfDemand, Double deliverDemand, Double unitPrice, Boolean isFakeFence) {
+    public Fence(Integer index, Double Lon, Double Lat, Double totalDemand, Double unitPrice, Boolean isFakeFence) {
         this.index = index;
         this.lon = Lon;
         this.lat = Lat;
         this.totalDemand = totalDemand;
-        this.selfDemand = selfDemand;
-        this.deliverDemand = deliverDemand;
         this.distanceMap = new HashMap<>();
         this.constName = "F" + index;
         this.validArcFence = new ArrayList<>();

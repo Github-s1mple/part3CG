@@ -92,7 +92,7 @@ public class GurobiSolve {
         carrierToDepotMap = new HashMap<>();
         for (int k : K) {
             Carrier carrier = carrierList.get(k - 1); // 载具ID从1开始
-            int depotId = - carrier.getDepot(); // 例如：返回-1（仓库0）或-2（仓库1）
+            int depotId = carrier.getDepot(); // 例如：返回-1（仓库0）或-2（仓库1）
             carrierToDepotMap.put(k, depotId);
         }
 
@@ -208,7 +208,7 @@ public class GurobiSolve {
         }
 
         // 2. 总运输成本：∑(k∈K) ∑(i∈V) ∑(j∈V) (Zijk × 路径i→j距离 × 单位距离成本) → 减成本，系数为负
-        double unitTransCost = Constants.DELIVER_COST_PER_METER; // 单位距离运输成本（元/米）
+        double unitTransCost = Constants.TRUCK_COST_PER_METER; // 单位距离运输成本（元/米）
         List<HashMap<Integer, Double>> depotToFenceDist = instance.getDepotDistanceMatrix(); // 仓库-围栏距离
         List<List<Double>> fenceToFenceDist = instance.getDistanceMatrix(); // 围栏-围栏距离
 
@@ -846,7 +846,7 @@ public class GurobiSolve {
             order.setDepot(carrier.getDepot());
 
             double totalDistance = calculateVehicleTotalDistance(k);
-            double transportCost = totalDistance * Constants.DELIVER_COST_PER_METER;
+            double transportCost = totalDistance * Constants.TRUCK_COST_PER_METER;
             order.setCarrierCost(transportCost);
             order.setDistance(totalDistance);
 
@@ -905,7 +905,7 @@ public class GurobiSolve {
 
             // ① 载具k的总行驶距离（需计算：所有选中路径的距离之和）
             double totalDistance = calculateVehicleTotalDistance(k);
-            double transportCost = totalDistance * Constants.DELIVER_COST_PER_METER;
+            double transportCost = totalDistance * Constants.TRUCK_COST_PER_METER;
             System.out.printf("行驶距离：%s米，运输成本：%s%n",
                     df.format(totalDistance), df.format(transportCost));
             order.setCarrierCost(transportCost);

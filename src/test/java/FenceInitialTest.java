@@ -12,11 +12,11 @@ public class FenceInitialTest {
     public static void main(String[] args) {
         List<List<Double>> distanceMatrix;
         Initializer initializer = new Initializer();
-        distanceMatrix = initialDistanceMatrix();
+        distanceMatrix = initialDistanceMatrix(null);
         List<double[]> depotMap;
         depotMap = MapDistance.initialDepotMap();
         ArrayList<Fence> fenceList;
-        fenceList = initializer.fenceInitializer(distanceMatrix, null);
+        fenceList = initializer.fenceInitializer(distanceMatrix, null, null);
         ArrayList<Depot> depotList;
         depotList = initializer.depotInitializer(depotMap, null);
         System.out.println("测试完毕");

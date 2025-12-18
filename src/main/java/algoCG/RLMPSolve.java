@@ -19,6 +19,7 @@ import java.util.Collections;
 @Setter
 @Getter
 public class RLMPSolve {
+    private final Integer index;
     // 输入参数：列生成的最终结果（所有生成的订单）、问题实例
     private final List<Order> finalColumns;
     private final Instance instance;
@@ -38,6 +39,7 @@ public class RLMPSolve {
     private Map<String, Double> dualVariables;  // 对偶变量映射（约束名→对偶值）
 
     public RLMPSolve(List<Order> finalColumns, Instance instance) {
+        this.index = instance.getIndex();
         this.finalColumns = finalColumns;
         this.instance = instance;
         this.fences = instance.getFences();

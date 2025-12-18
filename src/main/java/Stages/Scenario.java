@@ -3,17 +3,16 @@ package Stages;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.Map;
 @Setter
 @Getter
 public class Scenario {
-    private final int id;
+    private final Integer id;
     private final double probability;
-    private final Map<Integer, Double> demandFactors;  // 栅格ID→需求系数
+    private final String allPointsPath;
 
-    public Scenario(int id, double probability, Map<Integer, Double> demandFactors) {
+    public Scenario(int id, double probability, String allPointsPath) {
         this.id = id;
         this.probability = probability;
-        this.demandFactors = demandFactors;
+        this.allPointsPath = allPointsPath;
     }
 }

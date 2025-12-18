@@ -1,5 +1,6 @@
 package baseinfo;
 
+import Stages.Scenario;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -60,10 +61,10 @@ public class MapDistance {
         return Constants.EARTH_RADIUS * c;
     }
 
-    public static List<List<Double>> initialDistanceMatrix() {
+    public static List<List<Double>> initialDistanceMatrix(Scenario scenario) {
         System.out.println("开始生成距离矩阵...");
         // XLSX文件路径
-        String xlsxFilePath = (Objects.equals(Constants.ALGO_MODE, "CG") ? Constants.allPointsFilePath : Constants.allPointsTestFilePath);
+        String xlsxFilePath = (Objects.equals(Constants.ALGO_MODE, "multi scenario") && scenario != null ? scenario.getAllPointsPath() : Constants.allPointsFilePath);
 
         // 存储所有点的经纬度（lon, lat）
         List<double[]> coordinates = new ArrayList<>();
@@ -109,7 +110,7 @@ public class MapDistance {
 
     public static List<double[]> initialDepotMap() {
         List<double[]> fenceCoordinates = new ArrayList<>();
-        try (FileInputStream fis = new FileInputStream(Objects.equals(Constants.ALGO_MODE, "CG") ? Constants.allPointsFilePath:Constants.allPointsTestFilePath);
+        try (FileInputStream fis = new FileInputStream(Constants.allPointsFilePath);
              Workbook workbook = WorkbookFactory.create(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0);

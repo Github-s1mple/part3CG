@@ -13,4 +13,5 @@ public class LocationResult {
     public List<Integer> selectedCandidates;
     // 栅格i的需求分配结果：fenceId -> candidateId
     public Map<Integer, Integer> extraAllocation;
+    public double theta;
 }

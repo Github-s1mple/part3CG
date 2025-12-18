@@ -11,7 +11,11 @@ import lombok.Getter;
 public class CGSolve {
     @Getter
     private RLMPSolve finalSolver;
-    public List<Order> solve(Instance instance) {
+    private final Instance instance;
+    public CGSolve(Instance instance){
+        this.instance = instance;
+    }
+    public List<Order> solve() {
         try {
             // 1. 初始化列生成算法
             OrderColumnGeneration cg = new OrderColumnGeneration(instance);

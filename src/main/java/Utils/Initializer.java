@@ -1,5 +1,6 @@
 package Utils;
 
+import Stages.Scenario;
 import baseinfo.Constants;
 import impl.*;
 import org.apache.poi.ss.usermodel.*;
@@ -33,11 +34,11 @@ public class Initializer {
         carrierList = new ArrayList<>();
     }
 
-    public ArrayList<Fence> fenceInitializer(List<List<Double>> distanceMatrix, LocationResult result) {
+    public ArrayList<Fence> fenceInitializer(List<List<Double>> distanceMatrix, LocationResult result, Scenario scenario) {
         System.out.println("开始初始化围栏...");
         fenceList = new ArrayList<>();
 
-        try (FileInputStream fis = new FileInputStream(Objects.equals(Constants.ALGO_MODE, "CG") ? Constants.allPointsFilePath: Constants.allPointsTestFilePath);
+        try (FileInputStream fis = new FileInputStream(Objects.equals(Constants.ALGO_MODE, "multi scenario") && scenario != null ? scenario.getAllPointsPath() : Constants.allPointsFilePath);
              Workbook workbook = new XSSFWorkbook(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0); // 获取第一个工作表
@@ -55,9 +56,8 @@ public class Initializer {
 
                     double lon = getCellNumericValue(row.getCell(1));
                     double lat = getCellNumericValue(row.getCell(2));
-                    double totalDemand = getCellNumericValue(row.getCell(3)); // 第5列（索引4）
-                    double selfDemand = getCellNumericValue(row.getCell(4));  // 第6列（索引5）
-                    double deliverDemand = getCellNumericValue(row.getCell(5)); // 第8列（索引7）
+                    double totalDemand = getCellNumericValue(row.getCell(3));
+
 
                     // 创建Fence实例
                     Fence fence = new Fence(
@@ -65,8 +65,6 @@ public class Initializer {
                             lon,
                             lat,
                             totalDemand,
-                            selfDemand,
-                            deliverDemand,
                             0.0,
                             false
                     );
@@ -78,6 +76,7 @@ public class Initializer {
                         Integer targetDepot = result.getExtraAllocation().get(fence.getIndex());
                         for (Depot depot : depotList) {
                             if (depot.getIndex().equals(targetDepot)){
+                                fence.setXs(depot);
                                 double distance = calculateSphericalDistance(depot.getLatitude(), depot.getLongitude(), lat, lon);
                                 fence.setOriginalFenceValue(distance * Constants.DISTANCE_TO_NEAREST_FENCE);
                                 double selfPickDemand = calculateSelfPickupProbability(distance) * totalDemand;
@@ -157,39 +156,28 @@ public class Initializer {
     }
 
 
-    public ArrayList<Carrier> carrierInitializer(boolean isDifferentCarrier) {
+    public ArrayList<Carrier> carrierInitializer() {
         System.out.println("开始初始化载具...");
         ArrayList<Carrier> carrierList = new ArrayList<>();
-        if (isDifferentCarrier) {
-            System.out.println("当前未提供载具信息");
-            return carrierList;
-        } else {
-            Integer startDepotIndex = 1;
-            for (int index = 0; index < depotNum; index++) {
+        for (int index = 0; index < depotNum; index++) {
 
-                try {
-                    int currentIndex = startDepotIndex; // 当前行的序号
-                    Double capacity = Constants.MAX_CAPACITY;
-                    Double maxDistance = Constants.TRUCK_MAX_DISTANCE;
-                    Double minRatioCapacity = Constants.MIN_CARRIER_LOAD;
+            try {
+                Depot currentDepot = this.depotList.get(index);
+                Carrier carrier = new Carrier(
+                        index + 1,
+                        Constants.MAX_CAPACITY,
+                        Constants.TRUCK_MAX_DISTANCE,
+                        currentDepot.getIndex(),
+                        Constants.MIN_CARRIER_LOAD
+                );
 
-                    Carrier carrier = new Carrier(
-                            currentIndex,
-                            capacity,
-                            maxDistance,
-                            currentIndex,
-                            minRatioCapacity
-                    );
-
-                    carrierList.add(carrier);
-                    startDepotIndex++;
-                } catch (Exception e) {
-                    System.err.println("创建载具 " + index + " 失败：" + e.getMessage());
-                }
+                carrierList.add(carrier);
+            } catch (Exception e) {
+                System.err.println("创建载具 " + index + " 失败：" + e.getMessage());
             }
-            System.out.println("成功生成载具数：" + carrierList.size());
-            return carrierList;
         }
+        System.out.println("成功生成载具数：" + carrierList.size());
+        return carrierList;
     }
 
     public ArrayList<Candidate> candidateInitializer(List<double[]> fenceCoordinates) {
@@ -200,7 +188,7 @@ public class Initializer {
         }
 
         candidateList = new ArrayList<>();
-        try (FileInputStream fis = new FileInputStream(Objects.equals(Constants.ALGO_MODE, "CG") ? Constants.candidatePointsFilePath : Constants.candidatePointsTestFilePath);
+        try (FileInputStream fis = new FileInputStream(Constants.candidatePointsFilePath);
              Workbook workbook = WorkbookFactory.create(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0);
