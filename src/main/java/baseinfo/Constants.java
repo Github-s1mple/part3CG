@@ -9,7 +9,7 @@ public class Constants {
     public static final Double BIKE_COST_PER_METER = 0.005;
     public static final Double MAX_CAPACITY = 16.0;
     public static final Double MIN_CARRIER_LOAD = 5.0;
-    public static final double DISTANCE_TO_NEAREST_FENCE = 1; //围栏初始价值定义方式：与最近仓库的距离 * 系数
+    public static final double DISTANCE_TO_NEAREST_FENCE = 1; //围栏初始价值定义方式：与最近仓库的距离(千米) * 系数
 
     // 规则参数
     public static final Double OBJ_LB = 0.0;

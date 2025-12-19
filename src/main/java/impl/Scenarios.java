@@ -1,7 +1,5 @@
-package Stages;
+package impl;
 
-import impl.Instance;
-import impl.Order;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -13,9 +11,8 @@ public class Scenarios {
     private List<Scenario> scenarioList;
     private int scenarioNumber;
 
-    //TODO
-    public Scenarios() {
-        this.scenarioList = null;
+    public Scenarios(List<Scenario> scenarioList) {
+        this.scenarioList = scenarioList;
         this.scenarioNumber = scenarioList.size();
     }
 

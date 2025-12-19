@@ -1,7 +1,5 @@
 package impl;
 
-import Stages.Scenario;
-import baseinfo.Constants;
 import baseinfo.MapDistance;
 import Utils.Initializer;
 import lombok.Getter;

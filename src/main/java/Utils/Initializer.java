@@ -1,16 +1,20 @@
 package Utils;
 
-import Stages.Scenario;
+import impl.Scenario;
 import baseinfo.Constants;
 import impl.*;
 import org.apache.poi.ss.usermodel.*;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import static Utils.SelfPickupProbabilityCalculator.calculateSelfPickupProbability;
 import static baseinfo.MapDistance.calculateSphericalDistance;
@@ -24,6 +28,7 @@ public class Initializer {
     private ArrayList<Depot> depotList;
     private ArrayList<Candidate> candidateList;
     private ArrayList<Carrier> carrierList;
+    private ArrayList<Scenario> scenarioList;
 
     public Initializer() {
         fenceNum = 0;
@@ -58,7 +63,6 @@ public class Initializer {
                     double lat = getCellNumericValue(row.getCell(2));
                     double totalDemand = getCellNumericValue(row.getCell(3));
 
-
                     // 创建Fence实例
                     Fence fence = new Fence(
                             currentIndex,
@@ -82,6 +86,7 @@ public class Initializer {
                                 double selfPickDemand = calculateSelfPickupProbability(distance) * totalDemand;
                                 fence.setSelfDemand(selfPickDemand);
                                 fence.setDeliverDemand(totalDemand - selfPickDemand);
+                                fence.setBikeDemand(totalDemand - selfPickDemand);
                                 break;
                             }
                         }
@@ -100,6 +105,65 @@ public class Initializer {
         fenceNum = fenceList.size();
         System.out.println("成功生成围栏数：" + fenceNum);
         return fenceList;
+    }
+
+    public void updateDemand(Map<Integer, Integer> initialOj){
+        List<Integer> selectedCandidatesIndex = new ArrayList<>();
+        // ========== 步骤1：筛选选中的候选点（initialOj值为1的candidateId） ==========
+        for (Map.Entry<Integer, Integer> entry : initialOj.entrySet()) {
+            Integer candidateId = entry.getKey();
+            Integer isSelected = entry.getValue();
+            if (isSelected == 1) {
+                selectedCandidatesIndex.add(candidateId);
+            }
+        }
+
+        // 边界校验：无选中候选点时直接返回
+        if (selectedCandidatesIndex.isEmpty()) {
+            System.err.println("警告：initialOj中无选中的候选点！");
+            return;
+        }
+
+        // ========== 步骤2：过滤出选中的候选点（Candidate对象） ==========
+        List<Candidate> selectedCandidates = new ArrayList<>();
+        for (Candidate candidate : candidateList) {
+            if (selectedCandidatesIndex.contains(candidate.getIndex())) {
+                selectedCandidates.add(candidate);
+            }
+        }
+
+        // ========== 步骤3：为每个栅格分配最近的选中候选点 ==========
+        for (Fence fence : fenceList) {
+            Integer fenceId = fence.getIndex();
+            if (fenceId == 299) {
+                double p = 0.0;
+            };
+            double totalDemand = fence.getTotalDemand();
+            // 初始化最小距离和对应候选点ID
+            double minDistance = Double.MAX_VALUE;
+            Integer nearestCandidateId = 1;// candidate的index都是负数，因此默认的取1
+
+            // 遍历所有选中的候选点，计算距离并找最近的
+            for (Candidate selectedCandidate : selectedCandidates) {
+                double distance = selectedCandidate.getCandidateMap().get(fenceId);
+                // 更新最小距离和最近候选点
+                if (distance < minDistance) {
+                    minDistance = distance;
+                    nearestCandidateId = selectedCandidate.getIndex();
+                }
+            }
+
+            // 边界校验：找到有效候选点才分配
+            if (nearestCandidateId != 1) {
+                fence.setOriginalFenceValue(minDistance * Constants.DISTANCE_TO_NEAREST_FENCE);
+                double selfPickDemand = calculateSelfPickupProbability(minDistance) * totalDemand;
+                fence.setSelfDemand(selfPickDemand);
+                fence.setDeliverDemand(totalDemand - selfPickDemand);
+                fence.setBikeDemand(totalDemand - selfPickDemand);
+            } else {
+                System.err.println("警告：栅格" + fenceId + "未找到可分配的候选点！");
+            }
+        }
     }
 
 
@@ -213,6 +277,72 @@ public class Initializer {
         candidateNum = candidateList.size();
         System.out.println("成功生成候选点数：" + candidateList.size());
         return candidateList;
+    }
+
+
+    public static List<Scenario> scenarioInitializer() {
+        // 1. 配置模拟文件所在目录
+        String simDirPath = "生鲜日订单模拟结果";
+        File simDir = new File(simDirPath);
+
+        // 2. 校验目录是否存在
+        if (!simDir.exists() || !simDir.isDirectory()) {
+            System.err.println("目录不存在或不是有效目录：" + simDirPath);
+            return null;
+        }
+
+        // 3. 遍历目录下的Excel文件，生成Scenario列表
+        List<Scenario> scenarioList = new ArrayList<>();
+        int idCounter = 1; // 自增ID
+
+        File[] files = simDir.listFiles((dir, name) -> name.endsWith(".xlsx") && !name.contains("汇总"));
+        if (files == null || files.length == 0) {
+            System.err.println("目录下无模拟数据文件！");
+            return null;
+        }
+
+        for (File file : files) {
+            String fileName = file.getName();
+            String filePath = file.getAbsolutePath();
+
+            // 4. 提取文件名中的概率
+            Double probability = extractProbabilityFromFileName(fileName);
+            if (probability == null) {
+                System.err.println("无法提取概率，跳过文件：" + fileName);
+                continue;
+            }
+
+            // 5. 创建Scenario对象并添加到列表
+            Scenario scenario = new Scenario(idCounter++, probability, filePath);
+            scenarioList.add(scenario);
+        }
+
+        // 最终结果：scenarioList包含所有文件对应的Scenario对象
+        System.out.println("\n共创建" + scenarioList.size() + "个Scenario对象");
+        return scenarioList;
+    }
+
+    private static final Pattern PROBABILITY_PATTERN = Pattern.compile("概率([0-9.]+)");
+
+    private static Double extractProbabilityFromFileName(String fileName) {
+        Matcher matcher = PROBABILITY_PATTERN.matcher(fileName);
+        if (matcher.find()) {
+            String probStr = matcher.group(1);
+            // 清理末尾多余的小数点（如“0.3360.”→“0.3360”）
+            probStr = probStr.replaceAll("\\.$", "");
+            try {
+                double prob = Double.parseDouble(probStr);
+                // 额外校验：概率值应在0~1之间（业务合理性）
+                if (prob >= 0 && prob <= 1) {
+                    return prob;
+                } else {
+                    System.err.println("概率值超出0~1范围：" + probStr);
+                }
+            } catch (NumberFormatException e) {
+                System.err.println("概率格式错误（无法转数字）：" + probStr);
+            }
+        }
+        return null;
     }
 
     /**

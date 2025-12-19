@@ -175,7 +175,7 @@ public class FirstStageLocationModel {
 
                 // 计算路径i→j的距离（米）
                 HashMap<Integer, Double> distMap = candidateToFenceDist.get(- j - 1);
-                double dist = distMap.get(i - 1) * 1000; // 千米转米
+                double dist = distMap.get(i) * 1000; // 千米转米
                 objExpr.addTerm(bikeDemand * unitTransCost * dist, xVar);
             }
         }
@@ -508,37 +508,6 @@ public class FirstStageLocationModel {
 
     private boolean isFirstIter = true;
 
-    /**
-     * 迭代更新：更新fixedOValues为当前最优解，并重新初始化模型
-     * @param newFixedOValues 新的固定O_i解
-     * @throws GRBException Gurobi异常
-     */
-    public void updateFixedOValues(Map<Integer, Integer> newFixedOValues) throws GRBException {
-        // 1. 更新固定解
-        this.fixedOValues = newFixedOValues;
-        this.isFirstIter = false;
-
-        // 2. 重新初始化模型（释放旧模型+重建）
-        if (model != null) model.dispose();
-        if (env != null) env.dispose();
-
-        this.env = new GRBEnv();
-        this.model = new GRBModel(env);
-        // 复用原有参数设置
-        model.set(GRB.IntParam.OutputFlag, outputFlag ? 1 : 0);
-        model.set(GRB.DoubleParam.FeasibilityTol, 1e-5);
-        model.set(GRB.IntParam.Presolve, 1);
-        model.set(GRB.DoubleParam.MIPGap, 0.01);
-        model.set(GRB.StringParam.LogFile, "first_stage_iter.log");
-
-        // 3. 重新构建模型（变量+约束+目标）
-        defineVariables();
-        setObjective();
-        addCoreConstraints();
-        model.update();
-
-        System.out.println("第一阶段模型已更新固定解，当前固定O_i数量：" + fixedOValues.size());
-    }
 
     /**
      * 提取当前最优的O_i解（用于迭代更新）

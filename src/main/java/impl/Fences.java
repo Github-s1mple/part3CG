@@ -1,5 +1,6 @@
 package impl;
 
+import baseinfo.Constants;
 import lombok.Getter;
 import lombok.Setter;
 

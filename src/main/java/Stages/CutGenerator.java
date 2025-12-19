@@ -4,10 +4,10 @@ import algoCG.RLMPSolve;
 import com.gurobi.gurobi.*;
 import impl.Carrier;
 import impl.Instance;
+import impl.Scenarios;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.text.DecimalFormat;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;

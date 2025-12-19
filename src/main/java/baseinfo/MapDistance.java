@@ -1,6 +1,6 @@
 package baseinfo;
 
-import Stages.Scenario;
+import impl.Scenario;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -139,6 +139,34 @@ public class MapDistance {
     public static List<double[]> initialCandidateMap() {
         List<double[]> fenceCoordinates = new ArrayList<>();
         try (FileInputStream fis = new FileInputStream(Objects.equals(Constants.ALGO_MODE, "CG") ? Constants.allPointsFilePath:Constants.allPointsTestFilePath);
+             Workbook workbook = WorkbookFactory.create(fis)) {
+
+            Sheet sheet = workbook.getSheetAt(0);
+            // 跳过表头行（第0行），从第1行开始读取（与MapDistance保持一致）
+            for (int rowNum = 1; rowNum <= sheet.getLastRowNum(); rowNum++) {
+                Row row = sheet.getRow(rowNum);
+                if (row == null) continue;
+
+                // 解析经纬度：B列（索引1）=经度，C列（索引2）=纬度（兼容数字/字符串）
+                double longitude = getCellValueAsDouble(row.getCell(1));
+                double latitude = getCellValueAsDouble(row.getCell(2));
+
+                // 过滤无效经纬度（如NaN）
+                if (!Double.isNaN(longitude) && !Double.isNaN(latitude)) {
+                    fenceCoordinates.add(new double[]{longitude, latitude});
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("读取候选点坐标失败：" + e.getMessage());
+            return new ArrayList<>();
+        }
+        return fenceCoordinates;
+    }
+
+
+    public static List<double[]> initialFenceMap() {
+        List<double[]> fenceCoordinates = new ArrayList<>();
+        try (FileInputStream fis = new FileInputStream(Constants.allPointsFilePath);
              Workbook workbook = WorkbookFactory.create(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0);

@@ -1,12 +1,9 @@
 package Stages;
 
 import algoCG.CGSolve;
-import algoCG.OrderColumnGeneration;
-import algoCG.RLMPSolve;
 import impl.*;
 import com.gurobi.gurobi.*;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 

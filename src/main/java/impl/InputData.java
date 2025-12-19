@@ -32,17 +32,20 @@ public class InputData {
 
     public InputData(Boolean initialSolution) throws IOException {
         distanceMatrix = MapDistance.initialDistanceMatrix(null);
-        List<double []> candidateMap = MapDistance.initialCandidateMap();
+        List<double []> fenceMap = MapDistance.initialFenceMap();
         fences = new Fences();
         candidates = new Candidates();
         initializer = new Initializer();
-        candidates.setCandidateList(initializer.candidateInitializer(candidateMap));
+        candidates.setCandidateList(initializer.candidateInitializer(fenceMap));
         fences.setFenceList(initializer.fenceInitializer(distanceMatrix, null, null));
         fences.generateFenceIndexList();
         candidates.generateCandidateIndexList();
         candidateDistanceMatrix = candidates.generateCandidateDistanceMatrix();
         initialOj = new HashMap<>();
-        if(initialSolution) generateInitialSolution();
+        if(initialSolution) {
+            generateInitialSolution();
+            initializer.updateDemand(this.initialOj);
+        }
     }
 
     public void generateInitialSolution() throws IOException {
