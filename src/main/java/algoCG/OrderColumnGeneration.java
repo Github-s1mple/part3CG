@@ -131,7 +131,7 @@ public class OrderColumnGeneration {
 
         // 总时间限制
         int totalTimeLimit = (int) (Constants.ITERATION_TIME_LIMIT * (1 - Constants.RMPSOLVE_PROPORTION));
-        System.out.println("算法初始化完成！");
+        System.out.println("算法初始化完成，开始进行列生成...");
         // 循环条件：剩余时间>0 且 未超过最大列数
         while (true) {
             // 1. 检查是否已超时或达到最大列数，提前退出
@@ -172,13 +172,14 @@ public class OrderColumnGeneration {
             // 7. 输出迭代信息
             if (outputFlag) {
                 displayIterationInformation();
+                System.out.println("当前池中列数：" + allOrders.size() + "累计耗时：" + (CommonUtils.currentTimeInSecond() - startTime) + "秒");
             }
-
-            System.out.println("当前池中列数：" + allOrders.size() + "累计耗时：" + (CommonUtils.currentTimeInSecond() - startTime) + "秒");
         }
 
         // 释放资源
-        env.dispose();
+        this.env.dispose();
+        this.RLMPSolver.dispose();
+
         System.out.println("进入RMP的总列数：" + allOrders.size());
         return allOrders;
     }

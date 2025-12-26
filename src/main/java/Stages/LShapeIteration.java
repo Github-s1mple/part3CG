@@ -2,7 +2,6 @@ package Stages;
 
 import algoCG.CGSolve;
 import impl.*;
-import com.gurobi.gurobi.*;
 
 import java.util.List;
 import java.util.Map;
@@ -19,7 +18,7 @@ public class LShapeIteration {
     private double s_c = 100000;
     private FirstStageLocationModel firstStage;
     private double finalCost;
-    private Map<Integer, Integer> finalSolution;
+    private Map<Integer, Integer> Solution;
 
     public LShapeIteration(Scenarios scenarios) {
         this.scenarios = scenarios;
@@ -44,54 +43,83 @@ public class LShapeIteration {
 
             while (gap > GAP_THRESHOLD && iter < MAX_ITER) {
                 iter++;
-                System.out.println("\n========================================");
-                System.out.println("L形迭代第" + iter + "次");
+                // ---------- 记录单次迭代的开始时间 ----------
+                long iterationStartTime = System.currentTimeMillis();
                 System.out.println("========================================");
+                System.out.println("L-Shaped 迭代第" + iter + "次");
 
                 // -------------------- 步骤1：求解当前第一阶段模型（基于固定解） --------------------
+                long firstStageSolveStartTime = System.currentTimeMillis();
                 LocationResult firstStageResult = firstStage.solveIter();
+                long firstStageSolveEndTime = System.currentTimeMillis();
                 if (firstStageResult == null) {
                     System.err.println("第" + iter + "次迭代求解失败，终止");
                     break;
                 }
+                System.out.println("第一阶段模型求解耗时：" +
+                        String.format("%.2f", (firstStageSolveEndTime - firstStageSolveStartTime) / 1000.0) + " 秒");
 
                 // -------------------- 步骤2：提取当前最优O_i解 --------------------
-                Map<Integer, Integer> currentOSol = firstStage.getCurrentOSolution();
+                this.Solution = firstStage.getCurrentOSolution();
                 double currentSol = firstStage.getTotalCost();
                 System.out.println("当前最优值：" + currentSol);
-                //System.out.println("当前最优O_i解：" + currentOSol);
 
-                // -------------------- 步骤4：生成并添加割平面 --------------------
+                // -------------------- 步骤3：生成并添加割平面 --------------------
+                int scenarioCount = 1;
                 CutGenerator cutGenerator = new CutGenerator(firstStage, scenarios);
                 for (Scenario scenario : scenarios.getScenarioList()){
-                    Instance instance = new Instance(firstStageResult, scenario); // 你的第二阶段输入
-                    CGSolve cg = new CGSolve(instance);
-                    List<Order> allColumns = cg.solve(); // 生成的所有列
-                    cutGenerator.addRLMP(cg.getFinalSolver(), scenario.getProbability());
+                    // ---------- 记录单个场景的开始时间 ----------
+                    long scenarioStartTime = System.currentTimeMillis();
+                    System.out.println("\n正在计算第" + iter + "次迭代的第" + scenarioCount + " / " + scenarios.getScenarioList().size() + "个场景（ID：" + scenario.getId() + "）");
+
+                    Instance instance = new Instance(firstStageResult, scenario);
+                    CGSolve stage2Model = new CGSolve(instance);
+                    List<Order> allColumns = stage2Model.solve(); // 生成的所有列
+                    cutGenerator.addRLMP(stage2Model.getFinalSolver(), scenario.getProbability());
+
+                    // ---------- 计算并输出单个场景的耗时 ----------
+                    long scenarioEndTime = System.currentTimeMillis();
+                    double scenarioCostTime = (scenarioEndTime - scenarioStartTime) / 1000.0;
+                    System.out.println("第" + scenarioCount + "个场景计算耗时：" +
+                            String.format("%.2f", scenarioCostTime) + " 秒");
+                    scenarioCount++;
                 }
+
+                // ---------- 记录割平面生成耗时 ----------
+                long cutGenerateStartTime = System.currentTimeMillis();
                 boolean hasValidCut = cutGenerator.generateAndAddCut();
+                long cutGenerateEndTime = System.currentTimeMillis();
+                if (hasValidCut){
+                    System.out.println("\n割平面添加成功");
+                    System.out.println("\n割平面耗时：" + String.format("%.2f", (cutGenerateEndTime - cutGenerateStartTime) / 1000.0) + " 秒");
+                }
 
-                // -------------------- 步骤5：计算收敛间隙 --------------------
+
+                // -------------------- 步骤4：计算收敛gap --------------------
                 gap = (this.s_c - currentSol) / this.s_c;
-                System.out.println("当前迭代间隙：" + String.format("%.6f", gap));
+                System.out.println("当前迭代gap：" + String.format("%.6f", gap));
 
-                // -------------------- 步骤6：判断是否继续迭代 --------------------
+                // -------------------- 步骤5：判断是否继续迭代 --------------------
                 if (!hasValidCut || gap < GAP_THRESHOLD) {
-                    System.out.println("迭代收敛（无有效割平面/间隙达标），终止");
+                    System.out.println("迭代收敛（无有效割平面/gap达标），终止");
                     break;
                 }
                 this.s_c = currentSol;
                 firstStage.setFixedOValues(null);
+
+                // ---------- 计算并输出单次迭代的总耗时 ----------
+                long iterationEndTime = System.currentTimeMillis();
+                double iterationTotalTime = (iterationEndTime - iterationStartTime) / 1000.0;
+                System.out.println("\n第" + iter + "次迭代总耗时：" +
+                        String.format("%.2f", iterationTotalTime) + " 秒");
             }
 
             // ===================== 4. 输出最终结果 =====================
-            this.finalCost = firstStage.getModel().get(GRB.DoubleAttr.ObjVal);
-            this.finalSolution = firstStage.getCurrentOSolution();
             System.out.println("\n========================================");
             System.out.println("迭代结束（总迭代次数：" + iter + "）");
-            System.out.println("最终间隙：" + String.format("%.6f", gap));
-            System.out.println("最终固定O_i解：" + this.finalSolution);
-            System.out.println("最终总成本：" + this.finalCost);
+            System.out.println("最终gap：" + String.format("%.6f", gap));
+            System.out.println("最终固定O_i解：" + this.Solution);
+            System.out.println("最终总成本：" + this.s_c);
             System.out.println("========================================");
 
             // ===================== 5. 释放资源 =====================

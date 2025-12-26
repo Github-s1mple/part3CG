@@ -26,6 +26,7 @@ public class Constants {
     // 小规模测试数据的文件路径
     public static final String allPointsTestFilePath = "all_points_test.xlsx";
     public static final String candidatePointsTestFilePath = "candidate_points_test.xlsx";
+    public static final String scenariosFileFolderPath = "生鲜日订单模拟结果_5";
 
     // 算法控制参数
     public static final Integer M = 10000000; // 一个足够大的正数

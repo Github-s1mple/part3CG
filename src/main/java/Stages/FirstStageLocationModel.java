@@ -46,6 +46,7 @@ public class FirstStageLocationModel {
     private Map<Integer, Integer> fixedOValues;
     private GRBVar theta;  // 第二阶段期望成本下界变量（核心新增）
     private double totalCost;
+    private boolean isFirstIter = true;
 
     /**
      * 构造函数：初始化输入数据、问题维度及Gurobi环境
@@ -103,7 +104,9 @@ public class FirstStageLocationModel {
                         GRB.CONTINUOUS,           // 常数用连续型表示
                         varName
                 );
-                System.out.printf("已固定变量 O_%d = %d%n", i, fixedValue);
+                if (outputFlag){
+                    System.out.printf("已固定变量 O_%d = %d%n", i, fixedValue);
+                }
             } else {
                 // 不固定：保持原有二进制变量特性
                 var = model.addVar(
@@ -134,17 +137,16 @@ public class FirstStageLocationModel {
         // 3. θ变量（第二阶段期望成本下界）
         // 命名规范：Theta_SecondStageCost
         theta = model.addVar(
-                0.0, GRB.INFINITY,  // 下界0，上界无穷（成本非负）
-                1.0,                // 目标系数：1.0（目标函数=固定成本+θ）
-                GRB.CONTINUOUS,     // 连续变量
+                0.0,                // 节约成本非负 → 下界0
+                2000,       // 上界(初始二阶段期望）
+                0,               // 目标系数
+                GRB.CONTINUOUS,
                 "Theta_SecondStageCost"
         );
         varMap.put("Theta_SecondStageCost", theta);
-        System.out.println("已添加第二阶段成本下界变量θ");
-
         // 变量定义完成后更新模型
         model.update();
-        System.out.printf("第一阶段变量定义完成：共%d个变量（含θ）%n", varMap.size());
+        System.out.printf("第一阶段变量定义完成：共%d个变量%n", varMap.size());
     }
 
     /**
@@ -181,7 +183,7 @@ public class FirstStageLocationModel {
         }
 
         // 3. 第二阶段成本项：θ
-        objExpr.addTerm(1.0, theta);
+        objExpr.addTerm(-1.0, theta);
 
         // 设置最小化目标
         model.setObjective(objExpr, GRB.MINIMIZE);
@@ -332,7 +334,7 @@ public class FirstStageLocationModel {
      * @throws GRBException 约束添加异常
      */
     public void addBendersCut(GRBLinExpr cutExpr, String cutName) throws GRBException {
-        GRBConstr cutConstr = model.addConstr(theta, GRB.GREATER_EQUAL, cutExpr, cutName);
+        GRBConstr cutConstr = model.addConstr(cutExpr, GRB.LESS_EQUAL, theta, cutName);
         constrMap.put(cutName, cutConstr);
         model.update();
         System.out.println("已添加Benders割平面：" + cutName);
@@ -344,16 +346,16 @@ public class FirstStageLocationModel {
     public LocationResult solve() throws GRBException {
         // 记录求解开始时间
         long startTime = System.currentTimeMillis();
-        System.out.println("========================================");
-        System.out.println("开始求解第一阶段选址模型（含Benders割平面）......");
+        System.out.println("开始求解第一阶段选址模型");
         // 输出固定O_i的信息
-        if (!fixedOValues.isEmpty()) {
-            System.out.println("当前模式：固定O_i取值，求解其他变量");
-            System.out.println("固定的O_i值：" + fixedOValues);
-        } else {
-            System.out.println("当前模式：自动求解所有变量");
+        if (this.outputFlag){
+            if (!fixedOValues.isEmpty()) {
+                System.out.println("当前模式：固定O_i取值，求解其他变量");
+                System.out.println("固定的O_i值：" + fixedOValues);
+            } else {
+                System.out.println("当前模式：自动求解所有变量");
+            }
         }
-        System.out.println("========================================");
 
         try {
             // 执行求解
@@ -398,10 +400,8 @@ public class FirstStageLocationModel {
             System.out.printf("\n【第一阶段求解耗时】%n");
             System.out.printf("总耗时：%s 秒%n", df.format(totalTimeSec));
 
-            // 释放Gurobi资源（避免内存泄漏）
-            // 注意：迭代过程中不释放，仅在最终求解完成后释放
-            // model.dispose();
-            // env.dispose();
+            model.dispose();
+            env.dispose();
         }
     }
 
@@ -496,8 +496,9 @@ public class FirstStageLocationModel {
         return count;
     }
 
+
     /**
-     * 释放Gurobi资源（迭代结束后调用）
+     * 释放Gurobi资源
      */
     public void releaseResources() throws GRBException {
         if (model != null) model.dispose();
@@ -506,14 +507,6 @@ public class FirstStageLocationModel {
     }
 
 
-    private boolean isFirstIter = true;
-
-
-    /**
-     * 提取当前最优的O_i解（用于迭代更新）
-     * @return key=候选点ID，value=0/1
-     * @throws GRBException Gurobi异常
-     */
     public Map<Integer, Integer> getCurrentOSolution() throws GRBException {
         Map<Integer, Integer> currentOSol = new HashMap<>();
         for (int i : C) {
@@ -526,9 +519,6 @@ public class FirstStageLocationModel {
     }
 
 
-    /**
-     * 重载solve方法：迭代模式下不释放资源（仅最终释放）
-     */
     public LocationResult solveIter() throws GRBException {
         long startTime = System.currentTimeMillis();
         try {
@@ -548,8 +538,8 @@ public class FirstStageLocationModel {
             }
 
             // 输出迭代结果
-            double totalCost = model.get(GRB.DoubleAttr.ObjVal);
-            System.out.println("\n【迭代求解结果】");
+            this.totalCost = model.get(GRB.DoubleAttr.ObjVal);
+            System.out.println("\n【一阶段迭代求解结果】");
             System.out.println("总成本：" + df.format(totalCost) + " 元（第二阶段成本：" + df.format(theta.get(GRB.DoubleAttr.X)) + "）");
             System.out.println("选中候选点数量：" + countSelectedCandidates());
 
@@ -557,7 +547,6 @@ public class FirstStageLocationModel {
         } finally {
             totalTimeSec = (System.currentTimeMillis() - startTime) / 1000.0;
             System.out.printf("迭代求解耗时：%s 秒%n", df.format(totalTimeSec));
-            // 迭代模式下不释放资源！
         }
     }
 }

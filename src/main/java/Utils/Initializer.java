@@ -29,6 +29,7 @@ public class Initializer {
     private ArrayList<Candidate> candidateList;
     private ArrayList<Carrier> carrierList;
     private ArrayList<Scenario> scenarioList;
+    private Boolean outputFlag = false;
 
     public Initializer() {
         fenceNum = 0;
@@ -40,7 +41,9 @@ public class Initializer {
     }
 
     public ArrayList<Fence> fenceInitializer(List<List<Double>> distanceMatrix, LocationResult result, Scenario scenario) {
-        System.out.println("开始初始化围栏...");
+        if (outputFlag){
+            System.out.println("开始初始化围栏...");
+        }
         fenceList = new ArrayList<>();
 
         try (FileInputStream fis = new FileInputStream(Objects.equals(Constants.ALGO_MODE, "multi scenario") && scenario != null ? scenario.getAllPointsPath() : Constants.allPointsFilePath);
@@ -103,7 +106,11 @@ public class Initializer {
             System.err.println("处理Excel文件时发生错误：" + e.getMessage());
         }
         fenceNum = fenceList.size();
-        System.out.println("成功生成围栏数：" + fenceNum);
+
+        if (outputFlag){
+            System.out.println("成功生成围栏数：" + fenceNum);
+        }
+
         return fenceList;
     }
 
@@ -168,7 +175,9 @@ public class Initializer {
 
 
     public ArrayList<Depot> depotInitializer(List<double[]> fenceCoordinates, LocationResult result) {
-        System.out.println("开始初始化仓库地图...");
+        if (outputFlag) {
+            System.out.println("开始初始化仓库地图...");
+        }
         // 校验围栏坐标合法性
         if (fenceCoordinates == null || fenceCoordinates.isEmpty()) {
             System.err.println("围栏坐标为空，无法创建Depot");
@@ -215,13 +224,17 @@ public class Initializer {
         }
 
         depotNum = depotList.size();
-        System.out.println("成功生成仓库数：" + depotList.size());
+        if (outputFlag) {
+            System.out.println("成功生成仓库数：" + depotList.size());
+        }
         return depotList;
     }
 
 
     public ArrayList<Carrier> carrierInitializer() {
-        System.out.println("开始初始化载具...");
+        if (outputFlag) {
+            System.out.println("开始初始化载具...");
+        }
         ArrayList<Carrier> carrierList = new ArrayList<>();
         for (int index = 0; index < depotNum; index++) {
 
@@ -240,12 +253,17 @@ public class Initializer {
                 System.err.println("创建载具 " + index + " 失败：" + e.getMessage());
             }
         }
-        System.out.println("成功生成载具数：" + carrierList.size());
+        if (outputFlag) {
+            System.out.println("成功生成载具数：" + carrierList.size());
+        }
         return carrierList;
     }
 
     public ArrayList<Candidate> candidateInitializer(List<double[]> fenceCoordinates) {
-        System.out.println("开始初始化候选点地图...");
+        if (outputFlag) {
+            System.out.println("开始初始化候选点地图...");
+        }
+
         if (fenceCoordinates == null || fenceCoordinates.isEmpty()) {
             System.err.println("围栏坐标为空，无法创建candidate");
             return new ArrayList<>();
@@ -275,14 +293,16 @@ public class Initializer {
             return new ArrayList<>();
         }
         candidateNum = candidateList.size();
-        System.out.println("成功生成候选点数：" + candidateList.size());
+        if (outputFlag) {
+            System.out.println("成功生成候选点数：" + candidateList.size());
+        }
         return candidateList;
     }
 
 
     public static List<Scenario> scenarioInitializer() {
         // 1. 配置模拟文件所在目录
-        String simDirPath = "生鲜日订单模拟结果";
+        String simDirPath = Constants.scenariosFileFolderPath;
         File simDir = new File(simDirPath);
 
         // 2. 校验目录是否存在

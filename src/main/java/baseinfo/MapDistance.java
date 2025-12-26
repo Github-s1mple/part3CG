@@ -62,7 +62,7 @@ public class MapDistance {
     }
 
     public static List<List<Double>> initialDistanceMatrix(Scenario scenario) {
-        System.out.println("开始生成距离矩阵...");
+        // System.out.println("开始生成距离矩阵...");
         // XLSX文件路径
         String xlsxFilePath = (Objects.equals(Constants.ALGO_MODE, "multi scenario") && scenario != null ? scenario.getAllPointsPath() : Constants.allPointsFilePath);
 
@@ -91,12 +91,12 @@ public class MapDistance {
                 coordinates.add(new double[]{lon, lat});
             }
 
-            System.out.println("成功读取 " + coordinates.size() + " 个点的数据");
+            // System.out.println("成功读取 " + coordinates.size() + " 个点的数据");
 
             // 计算距离矩阵
             List<List<Double>> distanceMatrix = calculateDistanceMatrix(coordinates);
 
-            System.out.println("距离矩阵大小: " + distanceMatrix.size() + "x" + distanceMatrix.getFirst().size());
+            // System.out.println("距离矩阵大小: " + distanceMatrix.size() + "x" + distanceMatrix.getFirst().size());
             return distanceMatrix;
         } catch (IOException e) {
             System.err.println("读取XLSX文件时出错: " + e.getMessage());

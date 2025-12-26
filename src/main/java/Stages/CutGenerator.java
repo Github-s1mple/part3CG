@@ -8,6 +8,7 @@ import impl.Scenarios;
 import lombok.Getter;
 import lombok.Setter;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -22,10 +23,10 @@ public class CutGenerator {
     // 第一阶段模型实例
     private FirstStageLocationModel firstStageModel;
     // 第二阶段模型实例
-    private List<RLMPSolve> rlmpSolves;
+    private List<RLMPSolve> rlmpSolves = new ArrayList<>();
     // 候选点/仓库索引映射（候选点ID → 载具索引）
-    private Map<Integer, Integer> candidateToCarrierMap;
-    private Map<Integer, Double> rlmpToProbabilityMap;
+    private Map<Integer, Integer> candidateToCarrierMap = new HashMap<>();
+    private Map<Integer, Double> rlmpToProbabilityMap = new HashMap<>();
     private Scenarios scenarios;
     // 精度阈值
     private static final double EPS = 1e-6;
@@ -35,9 +36,10 @@ public class CutGenerator {
         this.scenarios = scenarios;
     }
 
-    public void addRLMP(RLMPSolve rlmpSolve, double scenarioProbability){
+    public void addRLMP(RLMPSolve rlmpSolve, double scenarioProbability) throws GRBException {
         this.rlmpSolves.add(rlmpSolve);
-        rlmpToProbabilityMap.put(rlmpSolve.getIndex(), scenarioProbability);
+        this.rlmpToProbabilityMap.put(rlmpSolve.getIndex(), scenarioProbability);
+        rlmpSolve.releaseResource();
     }
 
     /**
@@ -69,13 +71,6 @@ public class CutGenerator {
 
         // 7. 添加割平面到第一阶段模型：θ ≥ cutExpr
         firstStageModel.addBendersCut(cutExpr, cutName);
-
-        // 输出割平面信息（调试）
-        System.out.println("========================================");
-        System.out.println("生成Benders割平面：" + cutName);
-        System.out.println("割平面表达式：θ ≥ " + cutExpr.toString());
-        System.out.println("========================================");
-
         return true;
     }
 
@@ -98,7 +93,7 @@ public class CutGenerator {
                 dualSum += dualValue;
                 carrierDualMap.put(carrier.getIndex(), dualValue);
             } else {
-                System.out.println("未找到载具" + carrier.getIndex() + "约束[" + carrierConstName + "]的对偶值");
+                //System.out.println("未找到载具" + carrier.getIndex() + "约束[" + carrierConstName + "]的对偶值");
                 carrierDualMap.put(carrier.getIndex(), 0.0);
             }
         }

@@ -20,12 +20,12 @@ import java.util.Collections;
 @Getter
 public class RLMPSolve {
     private final Integer index;
-    // 输入参数：列生成的最终结果（所有生成的订单）、问题实例
-    private final List<Order> finalColumns;
+    // 输入参数：列生成的二阶段结果（所有生成的订单）、问题实例
+    private final List<Order> RMPColumns;
     private final Instance instance;
     private final Fences fences;
     private GRBEnv env;
-    private GRBModel finalModel;
+    private GRBModel RMPModel;
     private int timeLimit = 600; // 默认10分钟
 
     // 输出结果：最优订单、总收益
@@ -36,11 +36,11 @@ public class RLMPSolve {
     private Map<String, Order> idToOrderMap; // 订单ID→Order对象
     private Map<Integer, List<Order>> fenceToOrdersMap; // 围栏索引→关联订单列表
     private Map<String, List<Order>> carrierToOrdersMap; // 载具索引→关联订单列表
-    private Map<String, Double> dualVariables;  // 对偶变量映射（约束名→对偶值）
+    private Map<String, Double> dualVariables = new HashMap<>();  // 对偶变量映射（约束名→对偶值）
 
-    public RLMPSolve(List<Order> finalColumns, Instance instance) {
+    public RLMPSolve(List<Order> RMPColumns, Instance instance) {
         this.index = instance.getIndex();
-        this.finalColumns = finalColumns;
+        this.RMPColumns = RMPColumns;
         this.instance = instance;
         this.fences = instance.getFences();
         this.optimalOrders = new ArrayList<>();
@@ -53,15 +53,15 @@ public class RLMPSolve {
      */
     private void initPreCache() {
         // 1. 订单ID→Order对象映射
-        idToOrderMap = new HashMap<>(finalColumns.size());
-        for (Order order : finalColumns) {
+        idToOrderMap = new HashMap<>(RMPColumns.size());
+        for (Order order : RMPColumns) {
             String orderId = String.valueOf(order.getOrderId());
             idToOrderMap.putIfAbsent(orderId, order);
         }
 
         // 2. 围栏索引→关联订单列表（只保留有负载的订单）
         fenceToOrdersMap = new HashMap<>();
-        for (Order order : finalColumns) {
+        for (Order order : RMPColumns) {
             HashMap<Integer, Double> loads = order.getLoads();
             for (Integer fenceIndex : loads.keySet()) {
                 fenceToOrdersMap.computeIfAbsent(fenceIndex, k -> new ArrayList<>()).add(order);
@@ -70,7 +70,7 @@ public class RLMPSolve {
 
         // 3. 载具索引→关联订单列表
         carrierToOrdersMap = new HashMap<>();
-        for (Order order : finalColumns) {
+        for (Order order : RMPColumns) {
             Carrier carrier = order.getCarrier();
             if (carrier != null) {
                 String carrierIndex = String.valueOf(carrier.getIndex());
@@ -80,31 +80,24 @@ public class RLMPSolve {
     }
 
     /**
-     * 核心方法：求解最终主问题
+     * 核心方法：求解二阶段主问题
      * @return 最优订单组合（含选择比例）
      */
     public List<Order> solveRLMP() throws GRBException {
         // 1. 初始化模型环境
         initModel();
 
-        // 2. 构建最终模型（变量+约束）
+        // 2. 构建二阶段模型
         buildFinalModel();
 
         // 3. 求解模型
         optimizeModel();
 
-        // 4. 解析结果（最优订单、总收益、对偶值）
+        // 4. 解析结果
         parseResult();
 
-        // 5. 释放资源
-        releaseResource();
-
-        // 求解完成后，提取目标值
-        this.totalProfit = finalModel.get(GRB.DoubleAttr.ObjVal);
-
-        // 提取对偶变量（约束的Pi属性）
-        this.dualVariables = new HashMap<>();
-        for (GRBConstr constr : finalModel.getConstrs()) {
+        // 提取对偶变量
+        for (GRBConstr constr : RMPModel.getConstrs()) {
             String constrName = constr.get(GRB.StringAttr.ConstrName);
             dualVariables.put(constrName, constr.get(GRB.DoubleAttr.Pi));
         }
@@ -116,50 +109,53 @@ public class RLMPSolve {
      */
     private void initModel() throws GRBException {
         env = new GRBEnv();
-        finalModel = new GRBModel(env);
+        RMPModel = new GRBModel(env);
 
-        // 设置求解参数（最终求解用更严格的精度）
-        finalModel.set(GRB.IntParam.OutputFlag, 1); // 显示求解日志
-        finalModel.set(GRB.DoubleParam.FeasibilityTol, 1e-6);
-        finalModel.set(GRB.DoubleParam.OptimalityTol, 1e-6);
-        finalModel.set(GRB.IntParam.Presolve, 2); // 启用强预处理
-        finalModel.set(GRB.StringAttr.ModelName, "Final_RLMP");
+        // 设置求解参数
+        RMPModel.set(GRB.IntParam.OutputFlag, 1); // 显示求解日志
+        RMPModel.set(GRB.DoubleParam.FeasibilityTol, 1e-6);
+        RMPModel.set(GRB.DoubleParam.OptimalityTol, 1e-6);
+        RMPModel.set(GRB.IntParam.Presolve, 2); // 启用强预处理
+        RMPModel.set(GRB.StringAttr.ModelName, "Final_RLMP");
 
-        finalModel.set(GRB.DoubleParam.TimeLimit, timeLimit);
-        finalModel.set(GRB.DoubleParam.MIPGap, 0.01);
+        RMPModel.set(GRB.DoubleParam.TimeLimit, timeLimit);
+        RMPModel.set(GRB.DoubleParam.MIPGap, 0.01);
         // 设置目标函数为最大化
-        finalModel.set(GRB.IntAttr.ModelSense, GRB.MAXIMIZE);
+        RMPModel.set(GRB.IntAttr.ModelSense, GRB.MAXIMIZE);
     }
 
     /**
-     * 构建最终模型：添加所有列生成的订单变量 + 完整约束（优化后）
+     * 构建二阶段模型：添加所有列生成的订单变量 + 完整约束（优化后）
      */
     private void buildFinalModel() throws GRBException {
         // 缓存：订单ID→变量映射
         HashMap<String, GRBVar> orderVarMap = new HashMap<>(idToOrderMap.size());
 
         // 1. 添加所有订单变量
-        for (Order order : finalColumns) {
+        for (Order order : RMPColumns) {
             String orderId = String.valueOf(order.getOrderId());
             if (orderVarMap.containsKey(orderId)) continue;
 
             // 变量：下界0、上界1、目标系数=订单收益
-            GRBVar var = finalModel.addVar(
+            GRBVar var = RMPModel.addVar(
                     0.0,
                     1.0,
                     order.getOriginalPrice(),
-                    GRB.BINARY,
+                    GRB.CONTINUOUS,
                     "Final_Order_" + orderId
             );
             orderVarMap.put(orderId, var);
         }
-        System.out.println("最终模型添加 " + orderVarMap.size() + " 个订单变量");
+        System.out.println("二阶段模型添加 " + orderVarMap.size() + " 个订单变量");
 
         // 2. 添加围栏容量约束（sum(x_i * load_{i,f}) ≤ 围栏最大容量）
+        int fenceConstraintCount = 0;
         for (Fence fence : fences.getFenceList()) {
+            Integer fenceIndex = fence.getIndex();
+            // 只建立有需求的围栏的约束
+            if (!fenceToOrdersMap.containsKey(fenceIndex)) continue;
             String constName = fence.getConstName();
             GRBLinExpr expr = new GRBLinExpr();
-            int fenceIndex = fence.getIndex();
 
             // 只遍历当前围栏的关联订单
             List<Order> relevantOrders = fenceToOrdersMap.getOrDefault(fenceIndex, Collections.emptyList());
@@ -174,15 +170,20 @@ public class RLMPSolve {
             }
 
             // 添加约束
-            finalModel.addConstr(expr, GRB.LESS_EQUAL, fence.getDeliverDemand(), constName);
+            RMPModel.addConstr(expr, GRB.LESS_EQUAL, fence.getDeliverDemand(), constName);
+            fenceConstraintCount++;
         }
-        System.out.println("最终模型添加 " + fences.getFenceList().size() + " 个围栏约束");
+        System.out.println("二阶段模型添加 " + fenceConstraintCount + " 个围栏约束");
 
         // 3. 添加载具资源约束（sum(x_i * 1) ≤ 载具最大资源）
+        int carrierConstraintCount = 0;
         for (Carrier carrier : instance.getCarrierList()) {
+            String carrierIndex = String.valueOf(carrier.getIndex());
+            // 只建立有订单的载具的约束
+            if (!carrierToOrdersMap.containsKey(carrierIndex)) continue;
+
             String constName = carrier.getConstName();
             GRBLinExpr expr = new GRBLinExpr();
-            String carrierIndex = String.valueOf(carrier.getIndex());
 
             // 只遍历当前载具的关联订单
             List<Order> relevantOrders = carrierToOrdersMap.getOrDefault(carrierIndex, Collections.emptyList());
@@ -196,9 +197,10 @@ public class RLMPSolve {
             }
 
             // 添加约束
-            finalModel.addConstr(expr, GRB.LESS_EQUAL, carrier.getMaxUseTimes(), constName);
+            RMPModel.addConstr(expr, GRB.LESS_EQUAL, carrier.getMaxUseTimes(), constName);
+            carrierConstraintCount++;
         }
-        System.out.println("最终模型添加 " + instance.getCarrierList().size() + " 个载具约束");
+        System.out.println("二阶段模型添加 " + carrierConstraintCount + " 个载具约束");
 
         // 4. 设置目标函数
         GRBLinExpr objExpr = new GRBLinExpr();
@@ -209,21 +211,21 @@ public class RLMPSolve {
                 objExpr.addTerm(order.getOriginalPrice(), entry.getValue());
             }
         }
-        finalModel.setObjective(objExpr, GRB.MAXIMIZE);
+        RMPModel.setObjective(objExpr, GRB.MAXIMIZE);
 
         // 更新模型使变量和约束生效
-        finalModel.update();
+        RMPModel.update();
     }
 
     /**
-     * 求解最终模型
+     * 求解二阶段主问题模型
      */
     private void optimizeModel() throws GRBException {
-        System.out.println("\n开始求解最终主问题（时间限制：" + timeLimit + "秒）...");
-        finalModel.optimize();
+        System.out.println("\n开始求解二阶段主问题（时间限制：" + timeLimit + "秒）...");
+        RMPModel.optimize();
 
         // 检查求解状态（重点处理时间限制）
-        int status = finalModel.get(GRB.IntAttr.Status);
+        int status = RMPModel.get(GRB.IntAttr.Status);
         switch (status) {
             case GRB.Status.OPTIMAL:
                 System.out.println("求解状态：找到最优解");
@@ -237,7 +239,7 @@ public class RLMPSolve {
             case GRB.Status.INFEASIBLE:
                 throw new GRBException("模型不可行", status);
             default:
-                throw new GRBException("最终主问题求解失败，状态码：" + status, status);
+                throw new GRBException("二阶段主问题求解失败，状态码：" + status, status);
         }
     }
 
@@ -246,14 +248,14 @@ public class RLMPSolve {
      */
     private void parseResult() throws GRBException {
         // 1. 解析总收益
-        totalProfit = finalModel.get(GRB.DoubleAttr.ObjVal);
-        System.out.println("\n===== 最终主问题求解结果 =====");
+        totalProfit = RMPModel.get(GRB.DoubleAttr.ObjVal);
+        System.out.println("\n===== 二阶段主问题求解结果 =====");
         System.out.println("总收益：" + String.format("%.2f", totalProfit));
-        System.out.println("总列数：" + finalColumns.size());
+        System.out.println("总列数：" + RMPColumns.size());
 
         // 2. 解析最优订单（变量值>1e-6视为选中）
         double epsilon = 1e-6;
-        for (GRBVar var : finalModel.getVars()) {
+        for (GRBVar var : RMPModel.getVars()) {
             String varName = var.get(GRB.StringAttr.VarName);
             String orderId = varName.replace("Final_Order_", "");
             double varValue = var.get(GRB.DoubleAttr.X);
@@ -280,7 +282,7 @@ public class RLMPSolve {
         // 验证围栏约束
         for (Fence fence : fences.getFenceList()) {
             String constName = fence.getConstName();
-            GRBConstr constr = finalModel.getConstrByName(constName);
+            GRBConstr constr = RMPModel.getConstrByName(constName);
             double actualLoad = constr.get(GRB.DoubleAttr.Slack); // 松弛变量（=最大容量-实际负载）
             double maxCapacity = fence.getDeliverDemand();
             double usedCapacity = maxCapacity - actualLoad;
@@ -290,7 +292,7 @@ public class RLMPSolve {
         // 验证载具约束
         for (Carrier carrier : instance.getCarrierList()) {
             String constName = carrier.getConstName();
-            GRBConstr constr = finalModel.getConstrByName(constName);
+            GRBConstr constr = RMPModel.getConstrByName(constName);
             double slack = constr.get(GRB.DoubleAttr.Slack);
             double maxResource = carrier.getMaxUseTimes();
             double usedResource = maxResource - slack;
@@ -300,7 +302,7 @@ public class RLMPSolve {
         // 验证载具距离约束（添加到verifyConstraints()方法中）
         for (Carrier carrier : instance.getCarrierList()) {
             String distanceConstName = carrier.getConstName() + "_distance";
-            GRBConstr distanceConstr = finalModel.getConstrByName(distanceConstName);
+            GRBConstr distanceConstr = RMPModel.getConstrByName(distanceConstName);
             if (distanceConstr == null) continue;
 
             double slack = distanceConstr.get(GRB.DoubleAttr.Slack); // 松弛量=最大距离-实际距离
@@ -313,8 +315,8 @@ public class RLMPSolve {
     /**
      * 释放Gurobi资源
      */
-    private void releaseResource() throws GRBException {
-        finalModel.dispose();
+    public void releaseResource() throws GRBException {
+        RMPModel.dispose();
         env.dispose();
     }
 }
