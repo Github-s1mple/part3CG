@@ -3,6 +3,7 @@ package Stages;
 import algoCG.CGSolve;
 import impl.*;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -114,11 +115,12 @@ public class LShapeIteration {
                         String.format("%.2f", iterationTotalTime) + " 秒");
             }
 
+            this.Solution.entrySet().removeIf(entry -> entry.getValue() != 1);
             // ===================== 4. 输出最终结果 =====================
             System.out.println("\n========================================");
             System.out.println("迭代结束（总迭代次数：" + iter + "）");
             System.out.println("最终gap：" + String.format("%.6f", gap));
-            System.out.println("最终固定O_i解：" + this.Solution);
+            System.out.println("最终O_i解：" + this.Solution);
             System.out.println("最终总成本：" + this.s_c);
             System.out.println("========================================");
 

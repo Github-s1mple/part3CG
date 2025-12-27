@@ -135,10 +135,9 @@ public class FirstStageLocationModel {
         }
 
         // 3. θ变量（第二阶段期望成本下界）
-        // 命名规范：Theta_SecondStageCost
         theta = model.addVar(
                 0.0,                // 节约成本非负 → 下界0
-                2000,       // 上界(初始二阶段期望）
+                1000,       // 上界(初始二阶段期望）
                 0,               // 目标系数
                 GRB.CONTINUOUS,
                 "Theta_SecondStageCost"
@@ -151,7 +150,7 @@ public class FirstStageLocationModel {
 
     /**
      * 设置目标函数：最小化候选点固定成本与第二阶段期望成本之和
-     * 数学表达：min Σ(f_i·O_i) + θ
+     * 数学表达：min Σ(f_i·O_i) + 全配送成本 - θ
      * @throws GRBException 目标函数设置可能抛出的异常
      */
     public void setObjective() throws GRBException {
