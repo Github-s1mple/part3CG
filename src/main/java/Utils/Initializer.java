@@ -335,6 +335,10 @@ public class Initializer {
             // 5. 创建Scenario对象并添加到列表
             Scenario scenario = new Scenario(idCounter++, probability, filePath);
             scenarioList.add(scenario);
+
+            if (idCounter > Constants.SCENARIO_NUM) {
+                break;
+            }
         }
 
         // 最终结果：scenarioList包含所有文件对应的Scenario对象

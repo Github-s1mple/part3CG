@@ -30,15 +30,16 @@ public class Constants {
 
     // 算法控制参数
     public static final Integer M = 10000000; // 一个足够大的正数
-    public static final Integer MAX_RLMP_COLUMNS = 300000;
+    public static final Integer MAX_RLMP_COLUMNS = 100000;
     public static final Integer ITERATION_TIME_LIMIT = 900; // 列生成算法的总时间（baseline不适用）
     public static final Double RMPSOLVE_PROPORTION = 0.3; // RMP求解时间占比
     public static final Double DUAL_MULTIPLIER = 1.0; //对偶值额外调参（标准值是1）
     public static final Integer OUTPUT_INTERVAL = 1000;
     public static final Integer ITERATION_COLUMN_NUM = 1000; //每轮生成的列数（对偶值更新频率）
-    public static final Boolean START_WITH_INITIALSOLUTION = true;//用初始解启动
+    public static final Boolean START_WITH_INITIALSOLUTION = true; //用初始解启动
+    public static final Integer SCENARIO_NUM = 1;
 
-    // LShaped算法控制参数
+    // GA算法控制参数
     public static final Integer MAX_ITER = 20; // 最大迭代次数
     public static final Double GAP_THRESHOLD = 1e-4;
 }

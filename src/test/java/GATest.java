@@ -1,4 +1,4 @@
-import Stages.LShapeIteration;
+import Stages.GAIteration;
 import impl.Scenario;
 import impl.Scenarios;
 import com.gurobi.gurobi.GRBException;
@@ -8,11 +8,11 @@ import java.util.List;
 
 import static Utils.Initializer.scenarioInitializer;
 
-public class LShapeTest {
+public class GATest {
     public static void main(String[] args) throws GRBException, IOException {
         List<Scenario> scenarioList = scenarioInitializer();
         Scenarios scenarios = new Scenarios(scenarioList);
-        LShapeIteration lShapeIteration = new LShapeIteration(scenarios);
-        lShapeIteration.solve();
+        GAIteration GAIteration = new GAIteration(scenarios);
+        GAIteration.solve();
     }
 }

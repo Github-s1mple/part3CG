@@ -156,16 +156,16 @@ public class OrderColumnGeneration {
                 break;
             }
 
-            // 4. 添加新列到主问题
+            // 4. 添加新列到二阶段主问题
             addRLMPColumns(newOrders);
             allOrders.addAll(newOrders);
 
-            // 5. 求解主问题并更新对偶值（耗时操作，建议增加超时检查）
+            // 5. 求解二阶段主问题并更新对偶值
             solveRLMPAndUpdateDuals();
 
-            // 6. 检查主问题后是否超时
+            // 6. 检查二阶段主问题后是否超时
             if (CommonUtils.currentTimeInSecond() - startTime >= totalTimeLimit) {
-                System.out.println("迭代" + iterationCnt + "：主问题求解超时");
+                System.out.println("迭代" + iterationCnt + "：二阶段主问题求解超时");
                 break;
             }
 
@@ -199,7 +199,7 @@ public class OrderColumnGeneration {
      */
     private void displayIterationInformation() throws GRBException {
         if (RLMPSolver.get(GRB.IntAttr.SolCount) == 0) {
-            System.out.println("迭代" + iterationCnt + "：主问题无可行解");
+            System.out.println("迭代" + iterationCnt + "：二阶段主问题无可行解");
             return;
         }
         double totalProfit = RLMPSolver.get(GRB.DoubleAttr.ObjVal); // 总收益
@@ -227,7 +227,7 @@ public class OrderColumnGeneration {
 
 
     /**
-     * 添加新列（路径变量）到主问题
+     * 添加新列（路径变量）到二阶段主问题
      * 核心：创建路径变量 + 更新约束系数（不重建约束）
      */
     private void addRLMPColumns(List<Order> newOrders) throws GRBException {
@@ -356,15 +356,15 @@ public class OrderColumnGeneration {
             int timeLimit = getIterationTimeLimitLeft();
             RLMPSolver.set(GRB.DoubleParam.TimeLimit, timeLimit);
             if (outputFlag) {
-                System.out.println("迭代" + iterationCnt + "：主问题求解时间限制=" + timeLimit + "秒");
+                System.out.println("迭代" + iterationCnt + "：二阶段主问题求解时间限制=" + timeLimit + "秒");
             }
 
-            // 求解主问题
+            // 求解二阶段主问题
             RLMPSolver.optimize();
             int status = RLMPSolver.get(GRB.IntAttr.Status);
             String statusDesc = GurobiUtils.getStatusDescription(status);
             if (outputFlag) {
-                System.out.println("迭代" + iterationCnt + "：主问题状态=" + statusDesc);
+                System.out.println("迭代" + iterationCnt + "：二阶段主问题状态=" + statusDesc);
             }
 
             // 仅在最优/次优状态下更新对偶值
@@ -383,7 +383,7 @@ public class OrderColumnGeneration {
             extractDualValuesToMap();
 
         } catch (GRBException e) {
-            System.err.printf("迭代%d：主问题求解异常 - 错误码=%d，信息=%s%n",
+            System.err.printf("迭代%d：二阶段主问题求解异常 - 错误码=%d，信息=%s%n",
                     iterationCnt, e.getErrorCode(), e.getMessage());
         }
     }

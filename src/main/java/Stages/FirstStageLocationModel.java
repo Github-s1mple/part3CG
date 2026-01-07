@@ -44,7 +44,6 @@ public class FirstStageLocationModel {
     private double totalTimeSec;
     // 存储固定的O_i取值（key=候选点ID，value=0或1，为空表示不固定）
     private Map<Integer, Integer> fixedOValues;
-    private GRBVar theta;  // 第二阶段期望成本下界变量（核心新增）
     private double totalCost;
     private boolean isFirstIter = true;
 
@@ -133,16 +132,6 @@ public class FirstStageLocationModel {
                 varMap.put(varName, var);
             }
         }
-
-        // 3. θ变量（第二阶段期望成本下界）
-        theta = model.addVar(
-                0.0,                // 节约成本非负 → 下界0
-                1000,       // 上界(初始二阶段期望）
-                0,               // 目标系数
-                GRB.CONTINUOUS,
-                "Theta_SecondStageCost"
-        );
-        varMap.put("Theta_SecondStageCost", theta);
         // 变量定义完成后更新模型
         model.update();
         System.out.printf("第一阶段变量定义完成：共%d个变量%n", varMap.size());
@@ -180,9 +169,6 @@ public class FirstStageLocationModel {
                 objExpr.addTerm(bikeDemand * unitTransCost * dist, xVar);
             }
         }
-
-        // 3. 第二阶段成本项：θ
-        objExpr.addTerm(-1.0, theta);
 
         // 设置最小化目标
         model.setObjective(objExpr, GRB.MINIMIZE);
@@ -326,22 +312,7 @@ public class FirstStageLocationModel {
         }
     }
 
-    /**
-     * 新增：添加Benders割平面约束
-     * @param cutExpr 割平面表达式（θ ≥ Σπ_j·O_j）
-     * @param cutName 割平面名称
-     * @throws GRBException 约束添加异常
-     */
-    public void addBendersCut(GRBLinExpr cutExpr, String cutName) throws GRBException {
-        GRBConstr cutConstr = model.addConstr(cutExpr, GRB.LESS_EQUAL, theta, cutName);
-        constrMap.put(cutName, cutConstr);
-        model.update();
-        System.out.println("已添加Benders割平面：" + cutName);
-    }
 
-    /**
-     * 求解模型并返回选址结果（对接第二阶段的核心方法）
-     */
     public LocationResult solve() throws GRBException {
         // 记录求解开始时间
         long startTime = System.currentTimeMillis();
@@ -349,7 +320,6 @@ public class FirstStageLocationModel {
         // 输出固定O_i的信息
         if (this.outputFlag){
             if (!fixedOValues.isEmpty()) {
-                System.out.println("当前模式：固定O_i取值，求解其他变量");
                 System.out.println("固定的O_i值：" + fixedOValues);
             } else {
                 System.out.println("当前模式：自动求解所有变量");
@@ -357,18 +327,10 @@ public class FirstStageLocationModel {
         }
 
         try {
-            // 执行求解
             model.optimize();
-
             // 输出求解状态
             int status = model.get(GRB.IntAttr.Status);
             System.out.println("求解状态：" + getStatusDescription(status));
-
-            // 无可行解时，输出冲突约束分析
-            if (status == GRB.Status.INFEASIBLE) {
-                System.err.println("第一阶段模型无可行解，已输出冲突约束");
-                return null;
-            }
 
             // 非可行/最优状态，终止
             if (status != GRB.Status.OPTIMAL && status != GRB.Status.SUBOPTIMAL) {
@@ -380,16 +342,16 @@ public class FirstStageLocationModel {
             this.totalCost = model.get(GRB.DoubleAttr.ObjVal);
             System.out.println("\n【第一阶段最优结果摘要】");
             System.out.println("========================================");
-            System.out.println("最优总成本：" + df.format(totalCost) + " 元（第二阶段期望成本：" + df.format(theta.get(GRB.DoubleAttr.X)) + "）");
+            System.out.println("最优总成本：" + df.format(totalCost) + " 元");
             System.out.println("选中的候选点数量：" + countSelectedCandidates());
             System.out.println("========================================");
 
-            // 输出详细信息（根据outputFlag控制）
+            // 输出详细信息
             if (outputFlag) {
                 outputAllDecisionVariables();
             }
 
-            // 生成选址结果（传递给第二阶段）
+            // 生成选址结果
             return generateLocationResult();
 
         } finally {
@@ -403,6 +365,90 @@ public class FirstStageLocationModel {
             env.dispose();
         }
     }
+
+
+    /**
+     * 求解函数：固定O变量取值，仅求解Xs变量
+     * 核心区别：强制O变量使用fixedOValues中的值，仅优化Xs变量的分配策略
+     * @return 选址结果（仅包含Xs变量的最优分配，O变量与fixedOValues一致）
+     * @throws GRBException Gurobi求解异常
+     */
+    public LocationResult solveWithFixedO() throws GRBException {
+        // 记录求解开始时间
+        long startTime = System.currentTimeMillis();
+        System.out.println("开始求解第一阶段选址模型（固定O变量，仅优化Xs变量）");
+        // 输出固定O_i的信息
+        if (this.outputFlag){
+            if (!fixedOValues.isEmpty()) {
+                System.out.println("固定的O_i值：" + fixedOValues);
+            } else {
+                System.err.println("警告：未设置固定的O变量值，该模式无意义！");
+            }
+        }
+
+        try {
+            // ========== 核心修改1：二次确认并锁定O变量 ==========
+            for (int i : C) {
+                String varName = String.format("O_%d", i);
+                GRBVar oVar = varMap.get(varName);
+                Integer fixedVal = fixedOValues.get(i);
+
+                // 确保所有O变量都被固定（未设置的默认按0处理）
+                if (fixedVal == null) {
+                    fixedVal = 0;
+                    fixedOValues.put(i, fixedVal); // 补全固定值，避免后续歧义
+                }
+
+                // 强制锁定O变量的上下界和取值（确保求解过程中不改变）
+                oVar.set(GRB.DoubleAttr.LB, fixedVal);
+                oVar.set(GRB.DoubleAttr.UB, fixedVal);
+                oVar.set(GRB.DoubleAttr.Start, fixedVal); // 设置初始值加速求解
+                if (outputFlag) {
+                    System.out.printf("强制锁定 O_%d = %d%n", i, fixedVal);
+                }
+            }
+            model.update(); // 更新模型使变量锁定生效
+
+            // ========== 求解逻辑（与原函数一致） ==========
+            model.optimize();
+            // 输出求解状态
+            int status = model.get(GRB.IntAttr.Status);
+            System.out.println("求解状态：" + getStatusDescription(status));
+
+            // 非可行/最优状态，终止
+            if (status != GRB.Status.OPTIMAL && status != GRB.Status.SUBOPTIMAL) {
+                System.err.println("未找到最优解或可行解，终止第一阶段求解");
+                return null;
+            }
+
+            // 输出求解结果摘要
+            this.totalCost = model.get(GRB.DoubleAttr.ObjVal);
+            System.out.println("\n【第一阶段最优结果摘要（固定O变量）】");
+            System.out.println("========================================");
+            System.out.println("最优总成本：" + df.format(totalCost) + " 元");
+            System.out.println("选中的候选点数量：" + countSelectedCandidates());
+            System.out.println("========================================");
+
+            // 输出详细信息
+            if (outputFlag) {
+                outputAllDecisionVariables();
+            }
+
+            // 生成选址结果
+            return generateLocationResult();
+
+        } finally {
+            // 计算求解耗时
+            long endTime = System.currentTimeMillis();
+            totalTimeSec = (endTime - startTime) / 1000.0;
+            System.out.printf("\n【第一阶段求解耗时（固定O变量）】%n");
+            System.out.printf("总耗时：%s 秒%n", df.format(totalTimeSec));
+
+            model.dispose();
+            env.dispose();
+        }
+    }
+
 
     /**
      * 生成选址结果（封装传递给第二阶段的信息）
@@ -434,10 +480,6 @@ public class FirstStageLocationModel {
             }
         }
         result.setExtraAllocation(extraAllocation);
-
-        // 3. 提取当前θ值（传递给第二阶段）
-        result.setTheta(theta.get(GRB.DoubleAttr.X));
-
         return result;
     }
 
@@ -459,11 +501,7 @@ public class FirstStageLocationModel {
                     i, df.format(val), val > 0.5 ? "选中" : "未选中");
         }
 
-        // 2. 输出θ：第二阶段期望成本
-        System.out.println("\n2. 第二阶段期望成本变量 θ = " + df.format(theta.get(GRB.DoubleAttr.X)) + " 元");
-        System.out.println("----------------------------------------");
-
-        // 3. 输出Xs_ij：配送需求分配变量
+        // 2. 输出Xs_ij：配送需求分配变量
         System.out.println("\n3. 配送需求分配变量 Xs_ij（Xs_栅格ID_候选点ID = 取值）");
         System.out.println("----------------------------------------");
         for (int i : N) {
@@ -515,37 +553,5 @@ public class FirstStageLocationModel {
             currentOSol.put(i, val > 1e-6 ? 1 : 0);
         }
         return currentOSol;
-    }
-
-
-    public LocationResult solveIter() throws GRBException {
-        long startTime = System.currentTimeMillis();
-        try {
-            model.optimize();
-
-            int status = model.get(GRB.IntAttr.Status);
-            System.out.println("求解状态：" + getStatusDescription(status));
-
-            if (status == GRB.Status.INFEASIBLE) {
-                System.err.println("第一阶段模型无可行解");
-                return null;
-            }
-
-            if (status != GRB.Status.OPTIMAL && status != GRB.Status.SUBOPTIMAL) {
-                System.err.println("未找到最优解或可行解");
-                return null;
-            }
-
-            // 输出迭代结果
-            this.totalCost = model.get(GRB.DoubleAttr.ObjVal);
-            System.out.println("\n【一阶段迭代求解结果】");
-            System.out.println("总成本：" + df.format(totalCost) + " 元（第二阶段成本：" + df.format(theta.get(GRB.DoubleAttr.X)) + "）");
-            System.out.println("选中候选点数量：" + countSelectedCandidates());
-
-            return generateLocationResult();
-        } finally {
-            totalTimeSec = (System.currentTimeMillis() - startTime) / 1000.0;
-            System.out.printf("迭代求解耗时：%s 秒%n", df.format(totalTimeSec));
-        }
     }
 }
