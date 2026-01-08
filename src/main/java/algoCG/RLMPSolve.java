@@ -146,7 +146,7 @@ public class RLMPSolve {
             );
             orderVarMap.put(orderId, var);
         }
-        System.out.println("二阶段模型添加 " + orderVarMap.size() + " 个订单变量");
+        //System.out.println("二阶段模型添加 " + orderVarMap.size() + " 个订单变量");
 
         // 2. 添加围栏容量约束（sum(x_i * load_{i,f}) ≤ 围栏最大容量）
         int fenceConstraintCount = 0;
@@ -173,7 +173,7 @@ public class RLMPSolve {
             RMPModel.addConstr(expr, GRB.LESS_EQUAL, fence.getDeliverDemand(), constName);
             fenceConstraintCount++;
         }
-        System.out.println("二阶段模型添加 " + fenceConstraintCount + " 个围栏约束");
+        //System.out.println("二阶段模型添加 " + fenceConstraintCount + " 个围栏约束");
 
         // 3. 添加载具资源约束（sum(x_i * 1) ≤ 载具最大资源）
         int carrierConstraintCount = 0;
@@ -200,7 +200,7 @@ public class RLMPSolve {
             RMPModel.addConstr(expr, GRB.LESS_EQUAL, carrier.getMaxUseTimes(), constName);
             carrierConstraintCount++;
         }
-        System.out.println("二阶段模型添加 " + carrierConstraintCount + " 个载具约束");
+        //System.out.println("二阶段模型添加 " + carrierConstraintCount + " 个载具约束");
 
         // 4. 设置目标函数
         GRBLinExpr objExpr = new GRBLinExpr();
@@ -251,7 +251,7 @@ public class RLMPSolve {
         totalProfit = RMPModel.get(GRB.DoubleAttr.ObjVal);
         System.out.println("\n===== 二阶段主问题求解结果 =====");
         System.out.println("总收益：" + String.format("%.2f", totalProfit));
-        System.out.println("总列数：" + RMPColumns.size());
+        //System.out.println("总列数：" + RMPColumns.size());
 
         // 2. 解析最优订单（变量值>1e-6视为选中）
         double epsilon = 1e-6;

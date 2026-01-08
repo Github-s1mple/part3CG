@@ -6,7 +6,9 @@ import impl.Fences;
 import impl.Order;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 public class PriceCalculator {
     /**
@@ -83,5 +85,29 @@ public class PriceCalculator {
         }
 
         return totalValue - order.getCarrierCost();
+    }
+
+    public static double calculateIndividualSimilarity(Map<Integer, Integer> ind1, Map<Integer, Integer> ind2) {
+        Set<Integer> keys1 = ind1.keySet();
+        Set<Integer> keys2 = ind2.keySet();
+
+        // 计算交集大小
+        Set<Integer> intersection = new HashSet<>(keys1);
+        intersection.retainAll(keys2);
+        int interSize = intersection.size();
+
+        // 计算并集大小
+        Set<Integer> union = new HashSet<>(keys1);
+        union.addAll(keys2);
+        int unionSize = union.size();
+
+        // 避免除0（两个空个体相似度为1）
+        return unionSize == 0 ? 1.0 : (double) interSize / unionSize;
+    }
+
+    public static double calculatePopulationAvgFitness(Map<Map<Integer, Integer>, Double> fitnessMap) {
+        if (fitnessMap.isEmpty()) return 0.0;
+        double totalFitness = fitnessMap.values().stream().mapToDouble(Double::doubleValue).sum();
+        return totalFitness / fitnessMap.size();
     }
 }

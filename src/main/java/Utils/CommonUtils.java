@@ -3,8 +3,7 @@ package Utils;
 import impl.Order;
 import org.apache.poi.ss.usermodel.Cell;
 
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 
 /**
  * 通用工具类，包含项目中常用的工具方法
@@ -105,5 +104,11 @@ public class CommonUtils {
             default:
                 throw new IllegalArgumentException("不支持的单元格类型：" + cell.getCellType());
         }
+    }
+
+    public static String getKeyString(Map<Integer, Integer> solution) {
+        List<Integer> sortedKeys = new ArrayList<>(solution.keySet());
+        Collections.sort(sortedKeys);
+        return String.join(",", sortedKeys.stream().map(String::valueOf).toArray(String[]::new));
     }
 }

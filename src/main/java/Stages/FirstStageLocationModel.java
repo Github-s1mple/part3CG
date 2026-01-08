@@ -100,7 +100,7 @@ public class FirstStageLocationModel {
                 var = model.addVar(
                         fixedValue, fixedValue,  // 上下界锁定为固定值
                         0.0,                      // 目标系数（暂设为0）
-                        GRB.CONTINUOUS,           // 常数用连续型表示
+                        GRB.BINARY,           // 常数用连续型表示
                         varName
                 );
                 if (outputFlag){
@@ -109,7 +109,7 @@ public class FirstStageLocationModel {
             } else {
                 // 不固定：保持原有二进制变量特性
                 var = model.addVar(
-                        0.0, 1.0,                // 变量上下界（0-1）
+                        0.0, 0.0,                // 变量上下界（0-1）
                         0.0,                      // 目标系数（暂设为0）
                         GRB.BINARY,               // 变量类型（二进制）
                         varName                   // 变量名
@@ -340,11 +340,8 @@ public class FirstStageLocationModel {
 
             // 输出求解结果摘要
             this.totalCost = model.get(GRB.DoubleAttr.ObjVal);
-            System.out.println("\n【第一阶段最优结果摘要】");
-            System.out.println("========================================");
             System.out.println("最优总成本：" + df.format(totalCost) + " 元");
             System.out.println("选中的候选点数量：" + countSelectedCandidates());
-            System.out.println("========================================");
 
             // 输出详细信息
             if (outputFlag) {
@@ -359,89 +356,6 @@ public class FirstStageLocationModel {
             long endTime = System.currentTimeMillis();
             totalTimeSec = (endTime - startTime) / 1000.0;
             System.out.printf("\n【第一阶段求解耗时】%n");
-            System.out.printf("总耗时：%s 秒%n", df.format(totalTimeSec));
-
-            model.dispose();
-            env.dispose();
-        }
-    }
-
-
-    /**
-     * 求解函数：固定O变量取值，仅求解Xs变量
-     * 核心区别：强制O变量使用fixedOValues中的值，仅优化Xs变量的分配策略
-     * @return 选址结果（仅包含Xs变量的最优分配，O变量与fixedOValues一致）
-     * @throws GRBException Gurobi求解异常
-     */
-    public LocationResult solveWithFixedO() throws GRBException {
-        // 记录求解开始时间
-        long startTime = System.currentTimeMillis();
-        System.out.println("开始求解第一阶段选址模型（固定O变量，仅优化Xs变量）");
-        // 输出固定O_i的信息
-        if (this.outputFlag){
-            if (!fixedOValues.isEmpty()) {
-                System.out.println("固定的O_i值：" + fixedOValues);
-            } else {
-                System.err.println("警告：未设置固定的O变量值，该模式无意义！");
-            }
-        }
-
-        try {
-            // ========== 核心修改1：二次确认并锁定O变量 ==========
-            for (int i : C) {
-                String varName = String.format("O_%d", i);
-                GRBVar oVar = varMap.get(varName);
-                Integer fixedVal = fixedOValues.get(i);
-
-                // 确保所有O变量都被固定（未设置的默认按0处理）
-                if (fixedVal == null) {
-                    fixedVal = 0;
-                    fixedOValues.put(i, fixedVal); // 补全固定值，避免后续歧义
-                }
-
-                // 强制锁定O变量的上下界和取值（确保求解过程中不改变）
-                oVar.set(GRB.DoubleAttr.LB, fixedVal);
-                oVar.set(GRB.DoubleAttr.UB, fixedVal);
-                oVar.set(GRB.DoubleAttr.Start, fixedVal); // 设置初始值加速求解
-                if (outputFlag) {
-                    System.out.printf("强制锁定 O_%d = %d%n", i, fixedVal);
-                }
-            }
-            model.update(); // 更新模型使变量锁定生效
-
-            // ========== 求解逻辑（与原函数一致） ==========
-            model.optimize();
-            // 输出求解状态
-            int status = model.get(GRB.IntAttr.Status);
-            System.out.println("求解状态：" + getStatusDescription(status));
-
-            // 非可行/最优状态，终止
-            if (status != GRB.Status.OPTIMAL && status != GRB.Status.SUBOPTIMAL) {
-                System.err.println("未找到最优解或可行解，终止第一阶段求解");
-                return null;
-            }
-
-            // 输出求解结果摘要
-            this.totalCost = model.get(GRB.DoubleAttr.ObjVal);
-            System.out.println("\n【第一阶段最优结果摘要（固定O变量）】");
-            System.out.println("========================================");
-            System.out.println("最优总成本：" + df.format(totalCost) + " 元");
-            System.out.println("选中的候选点数量：" + countSelectedCandidates());
-            System.out.println("========================================");
-
-            // 输出详细信息
-            if (outputFlag) {
-                outputAllDecisionVariables();
-            }
-
-            // 生成选址结果
-            return generateLocationResult();
-
-        } finally {
-            // 计算求解耗时
-            long endTime = System.currentTimeMillis();
-            totalTimeSec = (endTime - startTime) / 1000.0;
-            System.out.printf("\n【第一阶段求解耗时（固定O变量）】%n");
             System.out.printf("总耗时：%s 秒%n", df.format(totalTimeSec));
 
             model.dispose();
