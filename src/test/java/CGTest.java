@@ -1,20 +1,36 @@
+import Utils.ResultPersistenceUtil;
 import algoCG.ResultProcess;
 import algoCG.CGSolve;
 import baseinfo.Constants;
-import impl.Instance;
-import impl.Order;
-import impl.Orders;
+import impl.*;
+import org.apache.poi.ss.usermodel.Row;
+import org.apache.poi.ss.usermodel.Sheet;
+import org.apache.poi.ss.usermodel.Workbook;
+import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 
-import java.util.List;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.*;
+
+import static Utils.CommonUtils.getCellValue;
+import static Utils.Initializer.scenarioInitializer;
 
 public class CGTest {
-    public static void main(String[] args) {
+    public static void main(String[] args) throws IOException {
         Constants.ALGO_MODE = "CG";
-        Instance instance = new Instance();
+        List<Scenario> scenarioList = scenarioInitializer();
+        Scenarios scenarios = new Scenarios(scenarioList);
+        LocationResult firstStageResult = ResultPersistenceUtil.loadFirstStageResult();
+        Instance instance = new Instance(firstStageResult, scenarios.getScenarioList().get(0));
+        long gaIterStartTime = System.currentTimeMillis();
         CGSolve cgSolve = new CGSolve(instance);
         List<Order> optimalOrders = cgSolve.solve();
+        long gaIterEndTime = System.currentTimeMillis();
+        double gaIterCostTime = (gaIterEndTime - gaIterStartTime) / 1000.0;
         Orders orders = new Orders(optimalOrders);
-        ResultProcess resultProcess = new ResultProcess(orders);
-        resultProcess.showOrderDetail();
+        orders.setTime(gaIterCostTime);
+        System.out.println("时间：" + orders.getTime());
+        //ResultProcess resultProcess = new ResultProcess(orders);
+        //resultProcess.showOrderDetail();
     }
 }

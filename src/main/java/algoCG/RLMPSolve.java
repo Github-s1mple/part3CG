@@ -311,12 +311,4 @@ public class RLMPSolve {
             System.out.println("载具[" + carrier.getConstName() + "]距离：实际使用=" + String.format("%.2f", usedDistance) + "，最大允许=" + maxDistance + "，剩余=" + String.format("%.2f", slack));
         }
     }
-
-    /**
-     * 释放Gurobi资源
-     */
-    public void releaseResource() throws GRBException {
-        RMPModel.dispose();
-        env.dispose();
-    }
 }

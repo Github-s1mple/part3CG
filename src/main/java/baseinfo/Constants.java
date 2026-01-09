@@ -17,8 +17,9 @@ public class Constants {
     public static final Integer CARRY_MAX_USE_TIMES = 1;
 
     // 算法模式
-    public static String ALGO_MODE = "single scenario";
+    //public static String ALGO_MODE = "single scenario";
     //public static String ALGO_MODE = "multi scenario";
+    public static String ALGO_MODE = "building";
 
     // 完整数据的文件路径
     public static final String allPointsFilePath = "all_points.xlsx";

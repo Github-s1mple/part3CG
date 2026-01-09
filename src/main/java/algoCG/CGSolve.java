@@ -20,6 +20,7 @@ public class CGSolve {
             // 1. 初始化列生成算法
             OrderColumnGeneration cg = new OrderColumnGeneration(instance);
             //cg.setOutputFlag(true);
+            System.out.println("仓库编号" + cg.getDepots().getDepotIndexes());
             List<Order> allColumns = cg.solve(); // 生成的所有列
             // 2. 调用最终主问题求解器
             finalSolver = new RLMPSolve(allColumns, instance);

@@ -1,5 +1,7 @@
 package Stages;
 
+import Utils.PriceCalculator;
+import Utils.ResultPersistenceUtil;
 import algoCG.CGSolve;
 import baseinfo.Constants;
 import com.gurobi.gurobi.GRBException;
@@ -25,13 +27,13 @@ public class GAIteration {
     private List<Integer> allCandidateIds;
 
     // GA 核心配置参数
-    private int gaPopulationSize = 20; // 种群大小
+    private int gaPopulationSize = 10; // 种群大小
     private double gaCrossoverRate = 0.8; // 交叉概率
     private double gaMutationRate = 0.1; // 变异概率
-    private int gaElitismCount = 4; // 精英保留数量（直接进入下一代种群）
+    private int gaElitismCount = 2; // 精英保留数量（直接进入下一代种群）
     private double lastBestFitness = Double.MAX_VALUE;// 上一轮最优适应度
     private double lastAvgFitness = Double.MAX_VALUE;// 上一轮种群平均适应度
-
+    private int zeroProgressCount = 0;
     // 初始化种群参数
     private double eliteRatio = 0.1;    // 精英层占比
     private double neighborRatio = 0.6; // 近邻层占比
@@ -63,18 +65,10 @@ public class GAIteration {
             System.out.println("\n生成初始种群中（大小：" + gaPopulationSize + "）...");
             List<Map<Integer, Integer>> population = initGAPopulation();
 
-            // 初始化：计算初始种群的适应度和最优值
-            fitnessMap = evaluatePopulationFitness(population);
-            updateGlobalBestSolution(fitnessMap);
-            lastBestFitness = fitnessMap.get(getCurrentPopulationBest(fitnessMap));
-            lastAvgFitness = calculatePopulationAvgFitness(fitnessMap);
-            System.out.println("初始种群最优适应度（总成本）：" + String.format("%.6f", lastBestFitness));
-            System.out.println("初始种群平均适应度（总成本）：" + String.format("%.6f", lastAvgFitness));
-
             // ===================== 3. GA 迭代优化主循环 =====================
-            System.out.println("========================================");
             System.out.println("GA开始迭代（最大迭代次数：" + Constants.MAX_ITER + "）");
-            for (int gaIter = 1; gaIter <= Constants.MAX_ITER; gaIter++) {
+            int gaIter = 1;
+            for (gaIter = 1; gaIter <= Constants.MAX_ITER; gaIter++) {
                 long gaIterStartTime = System.currentTimeMillis();
                 System.out.println("\n---------------------- GA第" + gaIter + "次迭代 ----------------------");
 
@@ -102,30 +96,33 @@ public class GAIteration {
 
                 // 3.6 更新种群和历史记录
                 population = mutatedPopulation;
+                if (lastAvgFitness == currentBestFitness) zeroProgressCount++;
                 lastBestFitness = currentBestFitness;
                 lastAvgFitness = currentAvgFitness;
 
-                // 3.7 输出迭代详情（含新增监控指标）
+                // 3.7 输出迭代详情
                 long gaIterEndTime = System.currentTimeMillis();
                 double gaIterCostTime = (gaIterEndTime - gaIterStartTime) / 1000.0;
-
                 System.out.println("当前迭代最优适应度（总成本）：" + String.format("%.6f", currentBestFitness));
                 System.out.println("当前迭代平均适应度（总成本）：" + String.format("%.6f", currentAvgFitness));
                 System.out.println("---------- 种群变化程度 ----------");
                 System.out.println("选择后→变异后 个体相似度均值：" + String.format("%.4f", changeMetrics.averageSimilarity));
                 System.out.println("变异后种群唯一个体占比：" + String.format("%.2f%%", changeMetrics.uniqueIndividualRatio * 100));
                 System.out.println("---------- 迭代提升效果 ----------");
-                System.out.println("最优适应度提升值：" + String.format("%.6f", improveMetrics.bestImprovementValue));
-                System.out.println("最优适应度提升率：" + String.format("%.2f%%", improveMetrics.bestImprovementRate * 100));
-                System.out.println("平均适应度提升值：" + String.format("%.6f", improveMetrics.avgImprovementValue));
-                System.out.println("平均适应度提升率：" + String.format("%.2f%%", improveMetrics.avgImprovementRate * 100));
+                System.out.println("最优适应度提升值：" + String.format("%.6f", improveMetrics.bestImprovementValue) + "(" + String.format("%.2f%%", improveMetrics.bestImprovementRate * 100) + ")");
+                System.out.println("平均适应度提升值：" + String.format("%.6f", improveMetrics.avgImprovementValue) + "(" + String.format("%.2f%%", improveMetrics.avgImprovementRate * 100) + ")");
                 System.out.println("---------- 迭代耗时 ----------");
                 System.out.println("当前迭代耗时：" + String.format("%.2f", gaIterCostTime) + " 秒");
+
+                if (zeroProgressCount == 3) {
+                    System.out.println("连续3轮无提升，提前结束迭代，已迭代" + gaIter + "次");
+                    break;
+                }
             }
 
             // ===================== 4. 输出最终结果 =====================
             System.out.println("\n========================================");
-            System.out.println("GA迭代优化结束（总迭代次数：" + Constants.MAX_ITER + "）");
+            System.out.println("GA迭代优化结束（总迭代次数：" + gaIter + "次）");
             System.out.println("最终最优O_i解：" + bestSolution);
             System.out.println("最终最优总成本：" + String.format("%.6f", finalBestCost));
             System.out.println("========================================");
@@ -203,76 +200,6 @@ public class GAIteration {
         return population;
     }
 
-    // ---------------------- 辅助方法 ----------------------
-    // ---------------------- 计算种群平均适应度 ----------------------
-    private double calculatePopulationAvgFitness(Map<Map<Integer, Integer>, Double> fitnessMap) {
-        if (fitnessMap.isEmpty()) return 0.0;
-        double totalFitness = fitnessMap.values().stream().mapToDouble(Double::doubleValue).sum();
-        return totalFitness / fitnessMap.size();
-    }
-
-    /**
-     * 过滤解：仅保留值为1的键值对
-     */
-    private Map<Integer, Integer> getFilteredSolution(Map<Integer, Integer> solution) {
-        Map<Integer, Integer> filtered = new HashMap<>();
-        solution.forEach((k, v) -> {
-            if (v == 1) filtered.put(k, 1);
-        });
-        return filtered;
-    }
-
-    /**
-     * 随机移除Map中的n个key
-     */
-    private void removeRandomKeys(Map<Integer, Integer> map, int n, Random random) {
-        if (n <= 0 || map.isEmpty()) return;
-        List<Integer> keys = new ArrayList<>(map.keySet());
-        Collections.shuffle(keys, random);
-        for (int i = 0; i < n && i < keys.size(); i++) {
-            map.remove(keys.get(i));
-        }
-    }
-
-    /**
-     * 随机添加n个未包含的key（值为1）
-     */
-    private void addRandomKeys(Map<Integer, Integer> map, int n, Random random) {
-        if (n <= 0) return;
-        List<Integer> notInMap = new ArrayList<>();
-        for (Integer id : allCandidateIds) {
-            if (!map.containsKey(id)) {
-                notInMap.add(id);
-            }
-        }
-        if (notInMap.isEmpty()) return;
-
-        Collections.shuffle(notInMap, random);
-        for (int i = 0; i < n && i < notInMap.size(); i++) {
-            map.put(notInMap.get(i), 1);
-        }
-    }
-
-    /**
-     * 去重并添加解到种群（返回是否成功添加）
-     */
-    private boolean addSolution(List<Map<Integer, Integer>> population,
-                                Set<String> existedKeyStr,
-                                Map<Integer, Integer> solution,
-                                boolean needDeduplicate) {
-        if (!needDeduplicate) {
-            population.add(solution);
-            return true;
-        }
-        String keyStr = getKeyString(solution);
-        if (!existedKeyStr.contains(keyStr)) {
-            population.add(solution);
-            existedKeyStr.add(keyStr);
-            return true;
-        }
-        return false;
-    }
-
 
     // ===================== GA 核心辅助方法：评估种群适应度 =====================
     /**
@@ -307,9 +234,12 @@ public class GAIteration {
             if (firstStageResult == null) {
                 System.err.println("个体一阶段求解失败，跳过该个体");
                 fitnessMap.put(individual, Double.MAX_VALUE); // 无效个体设为极大成本（被淘汰）
+
                 continue;
             }
-
+            if (Objects.equals(Constants.ALGO_MODE, "building")){
+                ResultPersistenceUtil.saveFirstStageResult(firstStageResult);
+            }
             double firstStageCost = firstStage.getTotalCost(); // 一阶段成本
 
             // ---------- 步骤2：多场景二阶段求解，计算期望成本 ----------
@@ -323,7 +253,10 @@ public class GAIteration {
 
                 // 累加场景期望成本（场景概率 * 单场景成本）
                 double scenarioCost = stage2Model.getFinalSolver().getTotalProfit();
-                expectedSecondStageCost += scenarioCost * scenario.getProbability();
+                //expectedSecondStageCost += scenarioCost * scenario.getProbability();
+
+                // 单场景调试用
+                expectedSecondStageCost += scenarioCost;
 
                 scenarioCount++;
             }
@@ -415,7 +348,6 @@ public class GAIteration {
         return selectedPopulation;
     }
 
-    // ===================== GA 核心辅助方法：交叉操作 =====================
     /**
      * 交叉操作：对选中的种群进行单点交叉，生成新个体
      */
@@ -538,5 +470,71 @@ public class GAIteration {
                 .min(Map.Entry.comparingByValue()) // 成本型：min，收益型改为max
                 .map(Map.Entry::getKey)
                 .orElse(null);
+    }
+
+    private double calculatePopulationAvgFitness(Map<Map<Integer, Integer>, Double> fitnessMap) {
+        return PriceCalculator.calculatePopulationAvgFitness(fitnessMap);
+    }
+
+    /**
+     * 过滤解：仅保留值为1的键值对
+     */
+    private Map<Integer, Integer> getFilteredSolution(Map<Integer, Integer> solution) {
+        Map<Integer, Integer> filtered = new HashMap<>();
+        solution.forEach((k, v) -> {
+            if (v == 1) filtered.put(k, 1);
+        });
+        return filtered;
+    }
+
+    /**
+     * 随机移除Map中的n个key
+     */
+    private void removeRandomKeys(Map<Integer, Integer> map, int n, Random random) {
+        if (n <= 0 || map.isEmpty()) return;
+        List<Integer> keys = new ArrayList<>(map.keySet());
+        Collections.shuffle(keys, random);
+        for (int i = 0; i < n && i < keys.size(); i++) {
+            map.remove(keys.get(i));
+        }
+    }
+
+    /**
+     * 随机添加n个未包含的key（值为1）
+     */
+    private void addRandomKeys(Map<Integer, Integer> map, int n, Random random) {
+        if (n <= 0) return;
+        List<Integer> notInMap = new ArrayList<>();
+        for (Integer id : allCandidateIds) {
+            if (!map.containsKey(id)) {
+                notInMap.add(id);
+            }
+        }
+        if (notInMap.isEmpty()) return;
+
+        Collections.shuffle(notInMap, random);
+        for (int i = 0; i < n && i < notInMap.size(); i++) {
+            map.put(notInMap.get(i), 1);
+        }
+    }
+
+    /**
+     * 去重并添加解到种群（返回是否成功添加）
+     */
+    private boolean addSolution(List<Map<Integer, Integer>> population,
+                                Set<String> existedKeyStr,
+                                Map<Integer, Integer> solution,
+                                boolean needDeduplicate) {
+        if (!needDeduplicate) {
+            population.add(solution);
+            return true;
+        }
+        String keyStr = getKeyString(solution);
+        if (!existedKeyStr.contains(keyStr)) {
+            population.add(solution);
+            existedKeyStr.add(keyStr);
+            return true;
+        }
+        return false;
     }
 }

@@ -15,6 +15,7 @@ public class Orders {
     private double totalCarrierCost;
     private double totalDistance;
     private int totalFenceNum;
+    private double time;
 
     public Orders(List<Order> orderList) {
         this.orderList = orderList;
