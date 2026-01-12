@@ -20,7 +20,7 @@ public class CGTest {
         Constants.ALGO_MODE = "CG";
         List<Scenario> scenarioList = scenarioInitializer();
         Scenarios scenarios = new Scenarios(scenarioList);
-        LocationResult firstStageResult = ResultPersistenceUtil.loadFirstStageResult();
+        LocationResult firstStageResult = ResultPersistenceUtil.loadFirstStageResult("firstStageResult_test.json");
         Instance instance = new Instance(firstStageResult, scenarios.getScenarioList().get(0));
         long gaIterStartTime = System.currentTimeMillis();
         CGSolve cgSolve = new CGSolve(instance);

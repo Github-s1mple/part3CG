@@ -20,7 +20,7 @@ public class GurobiSolve {
     private final List<Carrier> carrierList;
     private final List<Fence> fakeFences;
     private Map<Integer, Integer> carrierToDepotMap; // key=载具ID，value=所属仓库ID（如-1、-2）
-    private Boolean outputFlag = false;
+    private Boolean outputFlag = true;
     private double totalTimeSec;
     // 核心数据集合
     private Set<Integer> N;  // 围栏集合（点ID），例如 {1,2,...,F}（F为围栏数量）
@@ -340,8 +340,8 @@ public class GurobiSolve {
                 }
             }
 
-            // 约束：载具k必须从所属仓库出发到某个围栏（路径数=1）
-            GRBConstr constr = model.addConstr(expr, GRB.EQUAL, 1.0, constrName);
+            // 约束：载具k必须从所属仓库出发到某个围栏（路径数<=1）
+            GRBConstr constr = model.addConstr(expr, GRB.LESS_EQUAL, 1.0, constrName);
             constrMap.put(constrName, constr);
         }
     }
@@ -367,7 +367,7 @@ public class GurobiSolve {
                 }
             }
             // 约束：必须返回所属仓库（路径数=1）
-            GRBConstr constr = model.addConstr(expr, GRB.EQUAL, 1.0, constrName);
+            GRBConstr constr = model.addConstr(expr, GRB.LESS_EQUAL, 1.0, constrName);
             constrMap.put(constrName, constr);
         }
     }
@@ -626,7 +626,7 @@ public class GurobiSolve {
                     }
                 }
             }
-            GRBConstr constr = model.addConstr(expr, GRB.EQUAL, 1.0, constrName);
+            GRBConstr constr = model.addConstr(expr, GRB.LESS_EQUAL, 1.0, constrName);
             constrMap.put(constrName, constr);
         }
     }

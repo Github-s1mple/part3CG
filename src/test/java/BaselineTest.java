@@ -13,10 +13,9 @@ public class BaselineTest {
     public static void main(String[] args) {
         try {
             // 1. 初始化问题实例
-            Constants.ALGO_MODE = "CG";
             List<Scenario> scenarioList = scenarioInitializer();
             Scenarios scenarios = new Scenarios(scenarioList);
-            LocationResult firstStageResult = ResultPersistenceUtil.loadFirstStageResult();
+            LocationResult firstStageResult = ResultPersistenceUtil.loadFirstStageResult("firstStageResult_test.json");
             Instance instance = new Instance(firstStageResult, scenarios.getScenarioList().get(0));
             //Instance instance = new Instance();
             // 2. 创建求解器并初始化

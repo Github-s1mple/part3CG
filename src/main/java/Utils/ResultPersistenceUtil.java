@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets;
  */
 public class ResultPersistenceUtil {
     // 保存路径（可自定义，比如项目根目录下的 result 文件夹）
-    private static final String SAVE_PATH = "firstStageResult.json";
+    private static final String SAVE_PATH = "firstStageResult_test.json";
     // Gson 实例（配置格式化输出，便于查看）
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting() // 格式化JSON
@@ -44,7 +44,7 @@ public class ResultPersistenceUtil {
      * 从本地JSON文件读取 firstStageResult
      * @return 读取的结果对象（null表示文件不存在/读取失败）
      */
-    public static LocationResult loadFirstStageResult() {
+    public static LocationResult loadFirstStageResult(String SAVE_PATH) {
         File file = new File(SAVE_PATH);
         if (!file.exists()) {
             System.out.println("未找到保存的 FirstStageResult 文件，将重新求解");

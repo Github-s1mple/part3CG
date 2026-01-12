@@ -36,7 +36,6 @@ public class RLMPSolve {
     private Map<String, Order> idToOrderMap; // 订单ID→Order对象
     private Map<Integer, List<Order>> fenceToOrdersMap; // 围栏索引→关联订单列表
     private Map<String, List<Order>> carrierToOrdersMap; // 载具索引→关联订单列表
-    private Map<String, Double> dualVariables = new HashMap<>();  // 对偶变量映射（约束名→对偶值）
 
     public RLMPSolve(List<Order> RMPColumns, Instance instance) {
         this.index = instance.getIndex();
@@ -96,11 +95,6 @@ public class RLMPSolve {
         // 4. 解析结果
         parseResult();
 
-        // 提取对偶变量
-        for (GRBConstr constr : RMPModel.getConstrs()) {
-            String constrName = constr.get(GRB.StringAttr.ConstrName);
-            dualVariables.put(constrName, constr.get(GRB.DoubleAttr.Pi));
-        }
         return optimalOrders;
     }
 
@@ -141,7 +135,7 @@ public class RLMPSolve {
                     0.0,
                     1.0,
                     order.getOriginalPrice(),
-                    GRB.CONTINUOUS,
+                    GRB.BINARY,
                     "Final_Order_" + orderId
             );
             orderVarMap.put(orderId, var);
@@ -149,7 +143,6 @@ public class RLMPSolve {
         //System.out.println("二阶段模型添加 " + orderVarMap.size() + " 个订单变量");
 
         // 2. 添加围栏容量约束（sum(x_i * load_{i,f}) ≤ 围栏最大容量）
-        int fenceConstraintCount = 0;
         for (Fence fence : fences.getFenceList()) {
             Integer fenceIndex = fence.getIndex();
             // 只建立有需求的围栏的约束
@@ -171,9 +164,7 @@ public class RLMPSolve {
 
             // 添加约束
             RMPModel.addConstr(expr, GRB.LESS_EQUAL, fence.getDeliverDemand(), constName);
-            fenceConstraintCount++;
         }
-        //System.out.println("二阶段模型添加 " + fenceConstraintCount + " 个围栏约束");
 
         // 3. 添加载具资源约束（sum(x_i * 1) ≤ 载具最大资源）
         int carrierConstraintCount = 0;
@@ -200,7 +191,7 @@ public class RLMPSolve {
             RMPModel.addConstr(expr, GRB.LESS_EQUAL, carrier.getMaxUseTimes(), constName);
             carrierConstraintCount++;
         }
-        //System.out.println("二阶段模型添加 " + carrierConstraintCount + " 个载具约束");
+        System.out.println("二阶段模型添加 " + carrierConstraintCount + " 个载具约束");
 
         // 4. 设置目标函数
         GRBLinExpr objExpr = new GRBLinExpr();

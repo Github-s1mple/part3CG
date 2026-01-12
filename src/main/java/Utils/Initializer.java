@@ -46,7 +46,7 @@ public class Initializer {
         }
         fenceList = new ArrayList<>();
 
-        try (FileInputStream fis = new FileInputStream(Objects.equals(Constants.ALGO_MODE, "multi scenario") && scenario != null ? scenario.getAllPointsPath() : Constants.allPointsFilePath);
+        try (FileInputStream fis = new FileInputStream(scenario != null ? scenario.getAllPointsPath() : Constants.allPointsFilePath);
              Workbook workbook = new XSSFWorkbook(fis)) {
 
             Sheet sheet = workbook.getSheetAt(0); // 获取第一个工作表
@@ -115,63 +115,6 @@ public class Initializer {
         return fenceList;
     }
 
-    public void updateDemand(Map<Integer, Integer> initialOj){
-        List<Integer> selectedCandidatesIndex = new ArrayList<>();
-        // ========== 步骤1：筛选选中的候选点（initialOj值为1的candidateId） ==========
-        for (Map.Entry<Integer, Integer> entry : initialOj.entrySet()) {
-            Integer candidateId = entry.getKey();
-            Integer isSelected = entry.getValue();
-            if (isSelected == 1) {
-                selectedCandidatesIndex.add(candidateId);
-            }
-        }
-
-        // 边界校验：无选中候选点时直接返回
-        if (selectedCandidatesIndex.isEmpty()) {
-            System.err.println("警告：initialOj中无选中的候选点！");
-            return;
-        }
-
-        // ========== 步骤2：过滤出选中的候选点（Candidate对象） ==========
-        List<Candidate> selectedCandidates = new ArrayList<>();
-        for (Candidate candidate : candidateList) {
-            if (selectedCandidatesIndex.contains(candidate.getIndex())) {
-                selectedCandidates.add(candidate);
-            }
-        }
-
-        // ========== 步骤3：为每个栅格分配最近的选中候选点 ==========
-        for (Fence fence : fenceList) {
-            Integer fenceId = fence.getIndex();
-            double totalDemand = fence.getTotalDemand();
-            // 初始化最小距离和对应候选点ID
-            double minDistance = Double.MAX_VALUE;
-            Integer nearestCandidateId = 1;// candidate的index都是负数，因此默认的取1
-
-            // 遍历所有选中的候选点，计算距离并找最近的
-            for (Candidate selectedCandidate : selectedCandidates) {
-                double distance = selectedCandidate.getCandidateMap().get(fenceId);
-                // 更新最小距离和最近候选点
-                if (distance < minDistance) {
-                    minDistance = distance;
-                    nearestCandidateId = selectedCandidate.getIndex();
-                }
-            }
-
-            // 边界校验：找到有效候选点才分配
-            if (nearestCandidateId != 1) {
-                fence.setOriginalFenceValue(minDistance * Constants.DISTANCE_TO_NEAREST_FENCE);
-                double selfPickDemand = calculateSelfPickupProbability(minDistance) * totalDemand;
-                fence.setSelfDemand(selfPickDemand);
-                fence.setDeliverDemand(totalDemand - selfPickDemand);
-                fence.setBikeDemand(totalDemand - selfPickDemand);
-            } else {
-                System.err.println("警告：栅格" + fenceId + "未找到可分配的候选点！");
-            }
-        }
-    }
-
-
     public ArrayList<Depot> depotInitializer(List<double[]> fenceCoordinates, LocationResult result) {
         if (outputFlag) {
             System.out.println("开始初始化仓库地图...");
@@ -186,7 +129,7 @@ public class Initializer {
         // 确定文件路径：若有result则用正式路径，否则根据算法模式选择路径
         String filePath = (result != null)
                 ? Constants.candidatePointsFilePath
-                : (Objects.equals(Constants.ALGO_MODE, "CG") ? Constants.candidatePointsFilePath : Constants.candidatePointsTestFilePath);
+                : Constants.candidatePointsTestFilePath;
 
         try (FileInputStream fis = new FileInputStream(filePath);
              Workbook workbook = WorkbookFactory.create(fis)) {

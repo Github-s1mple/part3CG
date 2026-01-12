@@ -44,7 +44,7 @@ public class Depot {
                     fence[1], fence[0]   // 围栏的纬度（fence[1]）、经度（fence[0]）
             );
             depotMap.put(index + 1, distance);
-            if (distance <= Constants.TRUCK_MAX_DISTANCE / 2){
+            if (distance <= Constants.TRUCK_MAX_DISTANCE * Constants.EXPAND_STEP){
                 validArcFence.add(index + 1);
             }
         }
@@ -65,6 +65,7 @@ public class Depot {
         fence.setMinDispatchNum(0.0);
         fence.setMaxDispatchNum(0.0);
         fence.setValidArcFence(validArcFence);
+        validArcFence.add(999);
         fence.setNearestDiffLabelDist(nearestDiffLabelDist);
         fence.setConstName("ND" + index);
         return fence;

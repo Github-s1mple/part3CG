@@ -203,10 +203,9 @@ public class OrderColumnGeneration {
             return;
         }
         double totalProfit = RLMPSolver.get(GRB.DoubleAttr.ObjVal); // 总收益
-        double bestPathProfit = bidLabeling.getBestObj(); // 子问题生成的最优路径收益
         int usedTime = getTimeSinceStartTime();
-        System.out.printf("迭代%d：总收益=%.2f，路径总数=%d，最优新路径收益=%.2f，已耗时=%ds，剩余时间=%ds%n",
-                iterationCnt, totalProfit, RLMPVariables.size(), bestPathProfit, usedTime, getIterationTimeLimitLeft());
+        System.out.printf("迭代%d：总收益=%.2f，路径总数=%d，已耗时=%ds，剩余时间=%ds%n",
+                iterationCnt, totalProfit, RLMPVariables.size(), usedTime, getIterationTimeLimitLeft());
     }
 
 
