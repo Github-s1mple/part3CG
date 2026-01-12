@@ -10,6 +10,7 @@ import java.util.*;
 import java.text.DecimalFormat;
 
 import static Utils.GurobiUtils.getStatusDescription;
+import static Utils.SelfPickupProbabilityCalculator.calculateSelfPickupProbability;
 
 /**
  * 第一阶段选址模型（集成Benders割平面θ变量）
@@ -154,10 +155,9 @@ public class FirstStageLocationModel {
         }
 
         // 2. 骑手配送成本项
-        double unitTransCost = Constants.BIKE_COST_PER_METER; // 单位距离运输成本（元/米）
+        double unitTransCost = Constants.BIKE_COST_PER_METER_PER_ORDER; // 单位距离运输成本（元/米）
         for (int i : N) {
             Fence fence = fences.getFence(i);
-            double bikeDemand = fence.getBikeDemand();
             for (int j : C) {
                 String xName = String.format("Xs_%d_%d", i, j);
                 GRBVar xVar = varMap.get(xName);
@@ -165,8 +165,9 @@ public class FirstStageLocationModel {
 
                 // 计算路径i→j的距离（米）
                 HashMap<Integer, Double> distMap = candidateToFenceDist.get(- j - 1);
-                double dist = distMap.get(i) * 1000; // 千米转米
-                objExpr.addTerm(bikeDemand * unitTransCost * dist, xVar);
+                double dist = distMap.get(i);
+                double bikeDemand = (1 - calculateSelfPickupProbability(dist)) * fence.getTotalDemand();
+                objExpr.addTerm(bikeDemand * unitTransCost * dist * 1000, xVar);
             }
         }
 

@@ -44,7 +44,7 @@ public class InputData {
         initialOj = new HashMap<>();
         if(initialSolution) {
             generateInitialSolution();
-            initializer.updateDemand(this.initialOj);
+            //initializer.updateDemand(this.initialOj);
         }
     }
 

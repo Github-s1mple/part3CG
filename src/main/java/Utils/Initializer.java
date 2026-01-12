@@ -85,7 +85,7 @@ public class Initializer {
                             if (depot.getIndex().equals(targetDepot)){
                                 fence.setXs(depot);
                                 double distance = calculateSphericalDistance(depot.getLatitude(), depot.getLongitude(), lat, lon);
-                                fence.setOriginalFenceValue(distance * Constants.DISTANCE_TO_NEAREST_FENCE);
+                                fence.setOriginalFenceValue(distance * Constants.BIKE_COST_PER_METER_PER_ORDER * 1000);// 即每单骑手直接配送的成本
                                 double selfPickDemand = calculateSelfPickupProbability(distance) * totalDemand;
                                 fence.setSelfDemand(selfPickDemand);
                                 fence.setDeliverDemand(totalDemand - selfPickDemand);
@@ -93,7 +93,8 @@ public class Initializer {
                                 break;
                             }
                         }
-                    } else fence.setOriginalFenceValue(nearestDepotDistance * Constants.DISTANCE_TO_NEAREST_FENCE);
+                    }
+                    //fence.setOriginalFenceValue(nearestDepotDistance * Constants.DISTANCE_TO_NEAREST_FENCE);
                     fenceList.add(fence);
 
                 } catch (Exception e) {
@@ -142,9 +143,6 @@ public class Initializer {
         // ========== 步骤3：为每个栅格分配最近的选中候选点 ==========
         for (Fence fence : fenceList) {
             Integer fenceId = fence.getIndex();
-            if (fenceId == 299) {
-                double p = 0.0;
-            };
             double totalDemand = fence.getTotalDemand();
             // 初始化最小距离和对应候选点ID
             double minDistance = Double.MAX_VALUE;

@@ -208,14 +208,25 @@ public class GurobiSolve {
         }
 
         // 2. 总运输成本：∑(k∈K) ∑(i∈V) ∑(j∈V) (Zijk × 路径i→j距离 × 单位距离成本) → 减成本，系数为负
-        double unitTransCost = Constants.TRUCK_COST_PER_METER; // 单位距离运输成本（元/米）
+        double unitTransCost = Constants.TRUCK_COST_PER_METER_PER_TON; // 单位距离运输成本（元/米）
         List<HashMap<Integer, Double>> depotToFenceDist = instance.getDepotDistanceMatrix(); // 仓库-围栏距离
         List<List<Double>> fenceToFenceDist = instance.getDistanceMatrix(); // 围栏-围栏距离
 
         for (int k : K) {
+            GRBLinExpr totalD_k = new GRBLinExpr(); // 用线性表达式存储dVar的和
+            for (int i : V) {
+                if (N.contains(i)) { // 仅处理围栏节点的dVar
+                    String dName = String.format("d_%d_%d", i, k);
+                    GRBVar dVar = varMap.get(dName);
+                    if (dVar != null) {
+                        totalD_k.addTerm(1.0, dVar); // 累加所有dVar，系数为1
+                    }
+                }
+            }
             for (int i : V) {
                 for (int j : V) {
                     if (i == j) continue;
+
                     String zName = String.format("Z_%d_%d_%d", i, j, k); // 注意Z变量名格式：Z_起点_终点_载具
                     GRBVar zVar = varMap.get(zName);
                     if (zVar == null) continue;
@@ -846,7 +857,7 @@ public class GurobiSolve {
             order.setDepot(carrier.getDepot());
 
             double totalDistance = calculateVehicleTotalDistance(k);
-            double transportCost = totalDistance * Constants.TRUCK_COST_PER_METER;
+            double transportCost = totalDistance * Constants.TRUCK_COST_PER_METER_PER_TON;
             order.setCarrierCost(transportCost);
             order.setDistance(totalDistance);
 
@@ -905,7 +916,7 @@ public class GurobiSolve {
 
             // ① 载具k的总行驶距离（需计算：所有选中路径的距离之和）
             double totalDistance = calculateVehicleTotalDistance(k);
-            double transportCost = totalDistance * Constants.TRUCK_COST_PER_METER;
+            double transportCost = totalDistance * Constants.TRUCK_COST_PER_METER_PER_TON;
             System.out.printf("行驶距离：%s米，运输成本：%s%n",
                     df.format(totalDistance), df.format(transportCost));
             order.setCarrierCost(transportCost);

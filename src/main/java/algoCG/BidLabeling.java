@@ -25,8 +25,7 @@ public class BidLabeling {
     // 算法控制参数
     private Integer timeLimit;
     private Integer orderLimit;
-    private final Boolean checkFlag = true; // 过程约束检查开关
-    private Boolean outputFlag = false;     // 过程信息输出开关
+    private Boolean outputFlag = true;     // 过程信息输出开关
     private Double timeRecord = 0.0;        // 算法耗时记录
 
     // 统计与映射容器

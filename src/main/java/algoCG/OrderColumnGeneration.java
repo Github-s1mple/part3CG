@@ -50,7 +50,7 @@ public class OrderColumnGeneration {
         this.orderIdMap = new HashMap<>(); // 初始化订单映射
         this.constraintsMap = new HashMap<>();
         this.bidLabeling = new BidLabeling(this.instance);
-        this.bidLabeling.setOutputFlag(false);
+        //this.bidLabeling.setOutputFlag(this.outputFlag);
         this.bidLabeling.setOrderLimit(Constants.ITERATION_COLUMN_NUM);
 
         // 初始化环境和模型
@@ -405,15 +405,7 @@ public class OrderColumnGeneration {
                 successCnt++;
             } catch (GRBException e) {
                 failCnt++;
-                if (outputFlag) {
-                    System.out.printf("提取约束%s对偶值失败：%s%n", constName, e.getMessage());
-                }
             }
-        }
-
-        if (outputFlag) {
-            System.out.printf("迭代%d：对偶值提取完成（成功%d，失败%d）%n",
-                    iterationCnt, successCnt, failCnt);
         }
     }
 }
