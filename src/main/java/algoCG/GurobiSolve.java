@@ -500,8 +500,10 @@ public class GurobiSolve {
             }
 
             // 约束：总装载量 ≤ 载具容量
-            GRBConstr constr = model.addConstr(expr, GRB.LESS_EQUAL, capacity, constrName);
-            constrMap.put(constrName, constr);
+            GRBConstr constrMax = model.addConstr(expr, GRB.LESS_EQUAL, capacity, constrName);
+            constrMap.put(constrName, constrMax);
+            GRBConstr constrMin = model.addConstr(expr, GRB.GREATER_EQUAL, Constants.MIN_CARRIER_LOAD, constrName);
+            constrMap.put(constrName, constrMin);
         }
     }
 

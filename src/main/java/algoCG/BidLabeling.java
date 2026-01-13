@@ -142,28 +142,6 @@ public class BidLabeling {
         return generateOutputOrders();
     }
 
-    /**
-     * 输出截止当前各仓库的累计拓展次数、生成订单数（实时）
-     */
-    private void displayDepotStatsRealTime() {
-        if (!outputFlag) return;
-        System.out.println("\n=== 各仓库拓展/订单统计（本次调用-实时） ===");
-        int totalExpand = 0;
-        int totalOrder = 0;
-        for (Integer depotIdx : allDepotIndexes) {
-            int expandCount = depotExpandCount.getOrDefault(depotIdx, 0);
-            int orderCount = depotOrderCount.getOrDefault(depotIdx, 0);
-            double efficiency = expandCount == 0 ? 0 : (double) orderCount / expandCount;
-            totalExpand += expandCount;
-            totalOrder += orderCount;
-            System.out.printf("仓库%d：拓展次数=%d，有效订单数=%d，订单/拓展比=%.2f%n",
-                    depotIdx, expandCount, orderCount, efficiency);
-        }
-        double totalEfficiency = totalExpand == 0 ? 0 : (double) totalOrder / totalExpand;
-        System.out.printf("累计：拓展次数=%d，有效订单数=%d，整体订单/拓展比=%.2f%n",
-                totalExpand, totalOrder, totalEfficiency);
-        System.out.println("==========================================\n");
-    }
 
     /**
      * 算法结束后输出各仓库最终统计
@@ -240,10 +218,6 @@ public class BidLabeling {
             }
 
             iterationCnt++;
-            // 每N次迭代输出一次实时统计
-            if (outputFlag && iterationCnt % Constants.OUTPUT_INTERVAL == 0) {
-                displayDepotStatsRealTime();
-            }
         }
     }
 
@@ -532,15 +506,14 @@ public class BidLabeling {
 
         order.setReducedCost(PriceCalculator.calculateRC(order, dualsOfRLMP));
         // 仅统计有效订单（未被支配且成功加入池）
+        Integer depotIdx = order.getDepot();
         if (sameNodeSetOrder != null) {
             this.orderPool.remove(sameNodeSetOrder);
+            depotOrderCount.put(depotIdx, depotOrderCount.get(depotIdx) - 1);
         }
-        if (!this.orderPool.contains(order)) {
-            Integer depotIdx = order.getDepot();
-            depotOrderCount.put(depotIdx, depotOrderCount.get(depotIdx) + 1);
-            this.visited2order.put(routeKey, order);
-            this.orderPool.add(order);
-        }
+        depotOrderCount.put(depotIdx, depotOrderCount.get(depotIdx) + 1);
+        this.visited2order.put(routeKey, order);
+        this.orderPool.add(order);
     }
 
     private Order loading(Route route) {

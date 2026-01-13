@@ -77,8 +77,6 @@ public class Initializer {
                     );
 
                     fence.generateDistanceMap(distanceMatrix);
-                    double nearestDepotDistance = calNearestDepotDistance(fence, depotList);
-
                     if (result != null){
                         Integer targetDepot = result.getExtraAllocation().get(fence.getIndex());
                         for (Depot depot : depotList) {
@@ -94,7 +92,6 @@ public class Initializer {
                             }
                         }
                     }
-                    //fence.setOriginalFenceValue(nearestDepotDistance * Constants.DISTANCE_TO_NEAREST_FENCE);
                     fenceList.add(fence);
 
                 } catch (Exception e) {
@@ -185,8 +182,7 @@ public class Initializer {
                         index + 1,
                         Constants.MAX_CAPACITY,
                         Constants.TRUCK_MAX_DISTANCE,
-                        currentDepot.getIndex(),
-                        Constants.MIN_CARRIER_LOAD
+                        currentDepot.getIndex()
                 );
 
                 carrierList.add(carrier);
