@@ -135,10 +135,7 @@ public class BidLabeling {
         this.bidirectionalSearch();
         // 排序结果
         this.orderPool.sort(CommonUtils.dualComparator);
-        // 展示结果
-        if (this.outputFlag) {
-            displayDepotStatsFinal();
-        }
+
         return generateOutputOrders();
     }
 
@@ -147,44 +144,20 @@ public class BidLabeling {
      */
     private void displayDepotStatsRealTime() {
         if (!outputFlag) return;
-        System.out.println("\n=== 各仓库拓展/订单统计（本次调用-实时） ===");
-        int totalExpand = 0;
-        int totalOrder = 0;
-        for (Integer depotIdx : allDepotIndexes) {
-            int expandCount = depotExpandCount.getOrDefault(depotIdx, 0);
-            int orderCount = depotOrderCount.getOrDefault(depotIdx, 0);
-            double efficiency = expandCount == 0 ? 0 : (double) orderCount / expandCount;
-            totalExpand += expandCount;
-            totalOrder += orderCount;
-            System.out.printf("仓库%d：拓展次数=%d，有效订单数=%d，订单/拓展比=%.2f%n",
-                    depotIdx, expandCount, orderCount, efficiency);
-        }
-        double totalEfficiency = totalExpand == 0 ? 0 : (double) totalOrder / totalExpand;
-        System.out.printf("累计：拓展次数=%d，有效订单数=%d，整体订单/拓展比=%.2f%n",
-                totalExpand, totalOrder, totalEfficiency);
-        System.out.println("==========================================\n");
-    }
-
-    /**
-     * 算法结束后输出各仓库最终统计
-     */
-    private void displayDepotStatsFinal() {
-        if (!outputFlag) return;
         System.out.println("\n=== 各仓库拓展/订单统计 ===");
         int totalExpand = 0;
         int totalOrder = 0;
         for (Integer depotIdx : allDepotIndexes) {
             int expandCount = depotExpandCount.getOrDefault(depotIdx, 0);
             int orderCount = depotOrderCount.getOrDefault(depotIdx, 0);
-            double efficiency = expandCount == 0 ? 0 : (double) orderCount / expandCount;
             totalExpand += expandCount;
             totalOrder += orderCount;
-            System.out.printf("仓库%d：拓展次数=%d，有效订单数=%d，订单/拓展比=%.2f%n",
-                    depotIdx, expandCount, orderCount, efficiency);
+            System.out.printf("仓库%d：拓展次数=%d，有效订单数=%d",
+                    depotIdx, expandCount, orderCount);
         }
-        double totalEfficiency = totalExpand == 0 ? 0 : (double) totalOrder / totalExpand;
-        System.out.printf("总计：拓展次数=%d，有效订单数=%d，整体订单/拓展比=%.2f%n",
-                totalExpand, totalOrder, totalEfficiency);
+        System.out.printf("累计：拓展次数=%d，有效订单数=%d",
+                totalExpand, totalOrder);
+        System.out.println("==========================================\n");
     }
 
     /* 更新目标函数 */
@@ -524,6 +497,9 @@ public class BidLabeling {
         // 求解装卸及车型方案
         int startTime = CommonUtils.currentTimeInSecond();
         Order order = this.loading(route);
+//        if (route.getDepot() == -2){
+//            System.out.println("仓库编号");
+//        }
         this.timeRecord += CommonUtils.currentTimeInSecond() - startTime;
 
         if (order == null || order.getOriginalPrice() < Constants.OBJ_LB) {

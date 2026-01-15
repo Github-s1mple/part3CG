@@ -8,7 +8,7 @@ public class Constants {
     public static final Double MIN_CARRIER_LOAD = 10.0;
     public static final Double MAX_CAPACITY = 40.0;
     public static final Double BIKE_COST_PER_METER_PER_ORDER = 0.001;
-    public static final Double EXPAND_STEP = 0.8; // 标签拓展的步长
+    public static final Double EXPAND_STEP = 0.1; // 标签拓展的步长
     public static final Double BIKE_MAX_DISTANCE = 8.0; //千米
 
     // 规则参数
