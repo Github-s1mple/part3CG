@@ -17,11 +17,8 @@ import static Utils.Initializer.scenarioInitializer;
 
 public class CGTest {
     public static void main(String[] args) throws IOException {
-        Constants.ALGO_MODE = "CG";
-        List<Scenario> scenarioList = scenarioInitializer();
-        Scenarios scenarios = new Scenarios(scenarioList);
         LocationResult firstStageResult = ResultPersistenceUtil.loadFirstStageResult("firstStageResult_test.json");
-        Instance instance = new Instance(firstStageResult, scenarios.getScenarioList().get(0));
+        Instance instance = new Instance(firstStageResult);
         long gaIterStartTime = System.currentTimeMillis();
         CGSolve cgSolve = new CGSolve(instance);
         List<Order> optimalOrders = cgSolve.solve();

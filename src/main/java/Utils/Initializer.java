@@ -82,7 +82,7 @@ public class Initializer {
                         for (Depot depot : depotList) {
                             if (depot.getIndex().equals(targetDepot)){
                                 fence.setXs(depot);
-                                double distance = calculateSphericalDistance(depot.getLatitude(), depot.getLongitude(), lat, lon);
+                                double distance = depot.getDistance(fence);
                                 fence.setOriginalFenceValue(distance * Constants.BIKE_COST_PER_METER_PER_ORDER * 1000);// 即每单骑手直接配送的成本
                                 double selfPickDemand = calculateSelfPickupProbability(distance) * totalDemand;
                                 fence.setSelfDemand(selfPickDemand);

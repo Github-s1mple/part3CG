@@ -15,7 +15,8 @@ public class SelfPickupProbabilityCalculator {
     private static final double DECAY_RATE = 0.12;
     // 最大自提可接受距离（超过此距离，自提概率为0）
     private static final double MAX_ACCEPTABLE_DISTANCE = 20.0;
-
+    // 自提总量占比
+    private static final double TOTAL_SELF = 0.5;
     static {
         // 初始化距离分段基础概率：近距离基础概率高，中距离逐步降低
         DISTANCE_PROBABILITY_BASE.put(1.0, 0.85);   // ≤1公里：85%基础概率
@@ -59,15 +60,15 @@ public class SelfPickupProbabilityCalculator {
      */
     private static double getBaseProbabilityByDistance(double distance) {
         if (distance <= 1.0) {
-            return DISTANCE_PROBABILITY_BASE.get(1.0);
+            return DISTANCE_PROBABILITY_BASE.get(1.0) * TOTAL_SELF;
         } else if (distance <= 3.0) {
-            return DISTANCE_PROBABILITY_BASE.get(3.0);
+            return DISTANCE_PROBABILITY_BASE.get(3.0) * TOTAL_SELF;
         } else if (distance <= 5.0) {
-            return DISTANCE_PROBABILITY_BASE.get(5.0);
+            return DISTANCE_PROBABILITY_BASE.get(5.0) * TOTAL_SELF;
         } else if (distance <= 10.0) {
-            return DISTANCE_PROBABILITY_BASE.get(10.0);
+            return DISTANCE_PROBABILITY_BASE.get(10.0) * TOTAL_SELF;
         } else {
-            return DISTANCE_PROBABILITY_BASE.get(MAX_ACCEPTABLE_DISTANCE);
+            return DISTANCE_PROBABILITY_BASE.get(MAX_ACCEPTABLE_DISTANCE) * TOTAL_SELF;
         }
     }
 

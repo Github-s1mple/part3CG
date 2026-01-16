@@ -905,7 +905,6 @@ public class GurobiSolve {
         for (int k : K) { // 按载具ID遍历
             Order order = new Order();
             Carrier carrier = carrierList.get(k - 1); // 载具ID从1开始，列表索引从0开始
-            System.out.printf("\n载具%d 详情：", k);
             System.out.printf("所属仓库=%d，载具容量=%.2f",
                     carrier.getDepot(), carrier.getCapacity());
 
@@ -913,8 +912,6 @@ public class GurobiSolve {
             order.setOrderId(k);
             order.setCarrier(carrier);
             order.setDepot(carrier.getDepot());
-
-            System.out.println("----------------------------------------");
 
             // ① 载具k的总行驶距离（需计算：所有选中路径的距离之和）
             double totalDistance = calculateVehicleTotalDistance(k);
@@ -941,7 +938,7 @@ public class GurobiSolve {
                         totalLoad += load;
                         totalLoadProfit += profit;
                         System.out.printf("  围栏%d：装载量=%s（需求=%s），收益=%s%n",
-                                i - 1, df.format(load), df.format(fence.getDeliverDemand()), df.format(profit));
+                                fence.getIndex(), df.format(load), df.format(fence.getDeliverDemand()), df.format(profit));
                         order.addLoad(i, load);
                     }
                 }
@@ -1105,10 +1102,10 @@ public class GurobiSolve {
             while (currentNode != null) {
                 String nodeName;
                 if(M.contains(currentNode)){
-                    nodeName = "仓库" + (-currentNode - 1);
+                    nodeName = "仓库" + (currentNode);
                 }else {
-                    nodeName = "围栏" + (currentNode - 1);
-                    order.addFence(currentNode - 1);
+                    nodeName = "围栏" + (currentNode);
+                    order.addFence(currentNode);
                 }
 
                 path.add(nodeName);
