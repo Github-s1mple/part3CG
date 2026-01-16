@@ -213,10 +213,6 @@ public class BidLabeling {
             }
 
             iterationCnt++;
-            // 每N次迭代输出一次实时统计
-            if (outputFlag && iterationCnt % Constants.OUTPUT_INTERVAL == 0) {
-                displayDepotStatsRealTime();
-            }
         }
     }
 
@@ -508,15 +504,14 @@ public class BidLabeling {
 
         order.setReducedCost(PriceCalculator.calculateRC(order, dualsOfRLMP));
         // 仅统计有效订单（未被支配且成功加入池）
+        Integer depotIdx = order.getDepot();
         if (sameNodeSetOrder != null) {
             this.orderPool.remove(sameNodeSetOrder);
+            depotOrderCount.put(depotIdx, depotOrderCount.get(depotIdx) - 1);
         }
-        if (!this.orderPool.contains(order)) {
-            Integer depotIdx = order.getDepot();
-            depotOrderCount.put(depotIdx, depotOrderCount.get(depotIdx) + 1);
-            this.visited2order.put(routeKey, order);
-            this.orderPool.add(order);
-        }
+        depotOrderCount.put(depotIdx, depotOrderCount.get(depotIdx) + 1);
+        this.visited2order.put(routeKey, order);
+        this.orderPool.add(order);
     }
 
     private Order loading(Route route) {

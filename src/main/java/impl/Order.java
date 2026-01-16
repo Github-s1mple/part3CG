@@ -51,6 +51,6 @@ public class Order {
     }
 
     public void calculateCarrierPrice(){
-        carrierCost = distance * Constants.TRUCK_COST_PER_METER_PER_TON;
+        carrierCost = distance * Constants.TRUCK_COST_PER_METER_PER_TON * 1000;
     }
 }

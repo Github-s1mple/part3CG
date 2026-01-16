@@ -238,7 +238,7 @@ public class GAIteration {
                 continue;
             }
             if (Objects.equals(Constants.ALGO_MODE, "building")){
-                //ResultPersistenceUtil.saveFirstStageResult(firstStageResult);
+                ResultPersistenceUtil.saveFirstStageResult(firstStageResult);
             }
             double firstStageCost = firstStage.getTotalCost(); // 一阶段成本
 
