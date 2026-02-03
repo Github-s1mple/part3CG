@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets;
  */
 public class ResultPersistenceUtil {
     // 保存路径（可自定义，比如项目根目录下的 result 文件夹）
-    private static final String SAVE_PATH = "firstStageResult.json";
+    private static final String SAVE_PATH = "firstStageResult_test.json";
     // Gson 实例（配置格式化输出，便于查看）
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting() // 格式化JSON
