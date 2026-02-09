@@ -41,6 +41,10 @@ public class Instance {
         carrierList = initializer.carrierInitializer();
         carriers.setCarrierList(carrierList);
         orderList = null;
+        fences.SortValidArcFenceByOriginalValue();
+        for(Depot depot : depots.getDepotList()){
+            fences.sortValidArcFenceByOriginalValue(depot);
+        }
     }
 
     public Instance(LocationResult result) {
@@ -56,9 +60,12 @@ public class Instance {
         fences.generateFenceIndexList();
         depots.generateDepotIndexList();
         depotDistanceMatrix = depots.generateDepotDistanceMatrix();
-
         carrierList = initializer.carrierInitializer();
         carriers.setCarrierList(carrierList);
+        fences.SortValidArcFenceByOriginalValue();
+        for(Depot depot : depots.getDepotList()){
+            fences.sortValidArcFenceByOriginalValue(depot);
+        }
         orderList = null;
     }
 
@@ -80,5 +87,9 @@ public class Instance {
         orderList = null;
         this.scenario = scenario;
         this.scenarioProbability = scenario.getProbability();
+        fences.SortValidArcFenceByOriginalValue();
+        for(Depot depot : depots.getDepotList()){
+            fences.sortValidArcFenceByOriginalValue(depot);
+        }
     }
 }

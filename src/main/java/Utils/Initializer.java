@@ -29,7 +29,7 @@ public class Initializer {
     private ArrayList<Candidate> candidateList;
     private ArrayList<Carrier> carrierList;
     private ArrayList<Scenario> scenarioList;
-    private Boolean outputFlag = false;
+    private Boolean outputFlag = true;
 
     public Initializer() {
         fenceNum = 0;
@@ -56,7 +56,6 @@ public class Initializer {
             // 遍历数据行（从表头下一行开始）
             for (int rowNum = headerRowNum + 1; rowNum <= sheet.getLastRowNum(); rowNum++) {
                 Row row = sheet.getRow(rowNum);
-                if (row == null) continue;
 
                 try {
                     int currentIndex = index;

@@ -1,5 +1,6 @@
 package algoCG;
 
+import baseinfo.Constants;
 import impl.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -47,7 +48,7 @@ public class LoadingAlgorithm {
         double loadCnt = dispatchNum;
         for (Integer fenceIndex : indexes) {
             Fence fence = fences.getFence(fenceIndex);
-            double actualDispatchNum = min(fence.getMinDispatchNum(), fence.getDeliverDemand());
+            double actualDispatchNum = min(Constants.MIN_DISPATCH_NUM, fence.getDeliverDemand());
             loads.put(fenceIndex, actualDispatchNum);
             loadCnt -= actualDispatchNum;
         }

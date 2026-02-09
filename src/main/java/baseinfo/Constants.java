@@ -3,13 +3,14 @@ package baseinfo;
 public class Constants {
     // 模型参数
     public static final Double TRUCK_MAX_DISTANCE = 20.0; //千米
-    public static final Double TRUCK_COST_PER_METER_PER_TON = 0.0005;
+    public static final Double TRUCK_COST_PER_METER = 0.0005;
     public static final Integer MAX_VISIT_NUM = 20; //必须设置为偶数
     public static final Double MIN_CARRIER_LOAD = 10.0;
     public static final Double MAX_CAPACITY = 30.0;
     public static final Double BIKE_COST_PER_METER_PER_ORDER = 0.001;
-    public static final Double EXPAND_STEP = 0.5; // 标签拓展的步长
+    public static final Double EXPAND_STEP = 0.1; // 标签拓展的步长
     public static final Double BIKE_MAX_DISTANCE = 8.0; //千米
+    public static final Double MIN_DISPATCH_NUM = 1.0;
 
     // 规则参数
     public static final Double OBJ_LB = 0.0;

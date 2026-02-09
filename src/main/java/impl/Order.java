@@ -39,6 +39,11 @@ public class Order {
         this.carrier = carrier;
         this.depot = route.getDepot();
         this.originalPrice = 0;
+        Double dispatchNum = 0.0;
+        for(Double value : loads.values()){
+            dispatchNum += value;
+        }
+        this.dispatchNum = dispatchNum;
         calculateCarrierPrice();
     }
 
@@ -51,6 +56,6 @@ public class Order {
     }
 
     public void calculateCarrierPrice(){
-        carrierCost = distance * Constants.TRUCK_COST_PER_METER_PER_TON * 1000;
+        carrierCost = distance * Constants.TRUCK_COST_PER_METER * 1000;
     }
 }

@@ -493,9 +493,6 @@ public class BidLabeling {
         // 求解装卸及车型方案
         int startTime = CommonUtils.currentTimeInSecond();
         Order order = this.loading(route);
-//        if (route.getDepot() == -2){
-//            System.out.println("仓库编号");
-//        }
         this.timeRecord += CommonUtils.currentTimeInSecond() - startTime;
 
         if (order == null || order.getOriginalPrice() < Constants.OBJ_LB) {
@@ -532,7 +529,6 @@ public class BidLabeling {
     private List<Order> generateOutputOrders() {
         int takeNum = min(orderLimit, orderPool.size());
         List<Order> outputOrders = new ArrayList<>(orderPool.subList(0, takeNum));
-        // 保留剩余订单（避免原列表被修改）
         this.orderPool = new ArrayList<>(orderPool.subList(takeNum, orderPool.size()));
         return outputOrders;
     }

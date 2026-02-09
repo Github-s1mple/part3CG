@@ -42,6 +42,7 @@ public class InputData {
         candidates.generateCandidateIndexList();
         candidateDistanceMatrix = candidates.generateCandidateDistanceMatrix();
         initialOj = new HashMap<>();
+        fences.SortValidArcFenceByOriginalValue();
         if(initialSolution) {
             generateInitialSolution();
             //initializer.updateDemand(this.initialOj);
