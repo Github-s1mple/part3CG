@@ -5,10 +5,11 @@ public class Constants {
     public static final Double TRUCK_MAX_DISTANCE = 20.0; //千米
     public static final Double TRUCK_COST_PER_METER = 0.0005;
     public static final Integer MAX_VISIT_NUM = 20; //必须设置为偶数
+    public static final Integer MIN_VISIT_NUM = 1;
     public static final Double MIN_CARRIER_LOAD = 10.0;
-    public static final Double MAX_CAPACITY = 30.0;
+    public static final Double MAX_CAPACITY = 100.0;
     public static final Double BIKE_COST_PER_METER_PER_ORDER = 0.001;
-    public static final Double EXPAND_STEP = 0.1; // 标签拓展的步长
+    public static final Double EXPAND_STEP = 0.2; // 标签拓展的步长
     public static final Double BIKE_MAX_DISTANCE = 8.0; //千米
     public static final Double MIN_DISPATCH_NUM = 1.0;
 
@@ -35,7 +36,7 @@ public class Constants {
     public static final Integer MAX_RLMP_COLUMNS = 1000000;
     public static final Integer ITERATION_TIME_LIMIT = 300; // 列生成算法的总时间（baseline不适用）
     public static final Double RMPSOLVE_PROPORTION = 0.3; // RMP求解时间占比
-    public static final Double DUAL_MULTIPLIER = 1.0; //对偶值额外调参（标准值是1）
+    public static final Double DUAL_MULTIPLIER = 2.0; //对偶值额外调参（标准值是1）
     public static final Integer OUTPUT_INTERVAL = 1000;
     public static final Integer ITERATION_COLUMN_NUM = 1000; //每轮生成的列数（对偶值更新频率）
     public static final Boolean START_WITH_INITIALSOLUTION = true; //用初始解启动

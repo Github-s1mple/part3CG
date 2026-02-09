@@ -127,6 +127,7 @@ public class BidLabeling {
         this.dualsOfRLMP = dualsOfRLMP;
         // 更新围栏价值
         this.updateFenceValue(dualsOfRLMP);
+
         // 若初始orderPool超出orderLimit直接输出
         if (this.orderPool.size() >= this.orderLimit) {
             return generateOutputOrders();
@@ -173,6 +174,11 @@ public class BidLabeling {
         }
 
         orderPool.sort(CommonUtils.dualComparator);
+
+//        fences.SortValidArcFenceByOriginalValue();
+//        for(Depot depot : depots.getDepotList()){
+//            fences.sortValidArcFenceByOriginalValue(depot);
+//        }
     }
 
     /* 核心修改：并行双向标号搜索（所有仓库同时拓展） */
@@ -283,7 +289,7 @@ public class BidLabeling {
             }
 
             // 处理999虚拟节点（截断搜索，尝试连接前后向标签）
-            if (nextNode == 999 && label.getLoadedQuantity() >= Constants.MIN_CARRIER_LOAD) {
+            if (nextNode == 999 && label.getLoadedQuantity() >= Constants.MIN_CARRIER_LOAD && label.getVisitNum() >= Constants.MIN_VISIT_NUM) {
                 // 连接逻辑：仅连接同仓库的前后向标签
                 Integer depotIdx = label.getStartDepotIdx();
                 if (isForward) {

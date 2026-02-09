@@ -92,7 +92,7 @@ public class SelfPickupProbabilityCalculator {
 
     // 测试示例
     public static void main(String[] args) {
-        double[] testDistances = {0.5, 2.0, 4.0, 8.0, 15.0, 25.0};
+        double[] testDistances = {0.0, 2.0, 4.0, 8.0, 15.0, 25.0};
         for (double distance : testDistances) {
             double probability = calculateSelfPickupProbability(distance);
             System.out.printf("距离：%.1f公里 → 自提概率：%.2f%%\n",

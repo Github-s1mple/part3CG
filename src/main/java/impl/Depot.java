@@ -61,7 +61,7 @@ public class Depot {
     public Fence depot2Fence(Integer index){
         Fence fence = new Fence(index, longitude, latitude, 0.0, 0.0, true);
         fence.setDistanceMap(depotMap);
-        fence.setFenceValue(0);
+        fence.setFenceValue(0.0);
         fence.setMinDispatchNum(0.0);
         fence.setMaxDispatchNum(0.0);
         fence.setValidArcFence(validArcFence);

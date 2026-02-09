@@ -82,7 +82,8 @@ public class Initializer {
                             if (depot.getIndex().equals(targetDepot)){
                                 fence.setXs(depot);
                                 double distance = depot.getDistance(fence);
-                                fence.setOriginalFenceValue(distance * Constants.BIKE_COST_PER_METER_PER_ORDER * 1000);// 即每单骑手直接配送的成本
+                                if(distance < 0.01) fence.setOriginalFenceValue(0.0001);
+                                else fence.setOriginalFenceValue(distance * Constants.BIKE_COST_PER_METER_PER_ORDER * 1000);// 即每单骑手直接配送的成本
                                 double selfPickDemand = calculateSelfPickupProbability(distance) * totalDemand;
                                 fence.setSelfDemand(selfPickDemand);
                                 fence.setDeliverDemand(totalDemand - selfPickDemand);
