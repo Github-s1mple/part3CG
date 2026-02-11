@@ -2,17 +2,12 @@ package algoCG;
 
 import Utils.CommonUtils;
 import Utils.GurobiUtils;
+import com.gurobi.gurobi.*;
 import impl.*;
 import lombok.Getter;
 import lombok.Setter;
 import baseinfo.Constants;
-import com.gurobi.gurobi.GRB;
-import com.gurobi.gurobi.GRBConstr;
-import com.gurobi.gurobi.GRBEnv;
-import com.gurobi.gurobi.GRBException;
-import com.gurobi.gurobi.GRBLinExpr;
-import com.gurobi.gurobi.GRBModel;
-import com.gurobi.gurobi.GRBVar;
+
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.HashMap;
@@ -61,6 +56,10 @@ public class OrderColumnGeneration {
         this.RLMPSolver.set(GRB.IntParam.OutputFlag, 0); // 关闭Gurobi默认日志
         this.RLMPSolver.set(GRB.DoubleParam.FeasibilityTol, 1e-5);
         this.RLMPSolver.set(GRB.IntParam.Presolve, 1); // 启用预处理，提升求解效率
+
+        GRBLinExpr objExpr = new GRBLinExpr();
+        this.RLMPSolver.setObjective(objExpr, GRB.MAXIMIZE); // 最大化目标
+        this.RLMPSolver.update(); // 生效目标函数
 
         // 初始化空约束框架（围栏+载具）
         initializeEmptyConstraints();
@@ -230,16 +229,23 @@ public class OrderColumnGeneration {
      * 核心：创建路径变量 + 更新约束系数（不重建约束）
      */
     private void addRLMPColumns(List<Order> newOrders) throws GRBException {
+        GRBLinExpr objExpr = new GRBLinExpr(); // 新建线性表达式
+        GRBExpr currentObj = this.RLMPSolver.getObjective();
+
+        if (currentObj instanceof GRBLinExpr currentLinObj) {
+            // 复制所有项到新表达式
+            for (int i = 0; i < currentLinObj.size(); i++) {
+                GRBVar var = currentLinObj.getVar(i);
+                double coeff = currentLinObj.getCoeff(i);
+                objExpr.addTerm(coeff, var);
+            }
+        }
+
         for (Order order : newOrders) {
             String orderId = String.valueOf(order.getOrderId());
 
-            // 1. 跳过已存在的路径（原有代码不变）
-            if (RLMPVariables.containsKey(orderId)) {
-                if (outputFlag) {
-                    System.out.println("路径" + orderId + "已存在，跳过");
-                }
-                continue;
-            }
+            // 1. 跳过已存在的路径
+            if (RLMPVariables.containsKey(orderId)) continue;
 
             // 2. 创建路径变量（原有代码不变）
             double pathProfit = order.getOriginalPrice(); // 目标函数系数=路径收益（最大化）
@@ -247,9 +253,11 @@ public class OrderColumnGeneration {
                     0.0,                // 下界：不选该路径
                     1.0,                // 上界：仅允许一次访问
                     pathProfit,         // 目标系数：路径收益
-                    GRB.CONTINUOUS,     // 列生成松弛：连续变量；整数解时改GRB.BINARY
+                    GRB.CONTINUOUS,     // 列生成松弛：连续变量
                     "path_" + orderId   // 变量名：明确为路径变量，便于调试
             );
+
+            objExpr.addTerm(pathProfit, pathVar);
 
             // 3. 缓存变量和订单映射
             RLMPVariables.put(orderId, pathVar);
@@ -268,6 +276,8 @@ public class OrderColumnGeneration {
                         order.getDistance());
             }
         }
+
+        this.RLMPSolver.setObjective(objExpr, GRB.MAXIMIZE);
 
         // 7. 批量更新模型（生效所有变量和系数变更）
         RLMPSolver.update();

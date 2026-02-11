@@ -68,7 +68,7 @@ public class BidLabeling {
             this.labelPool.add(new ArrayList<>()); // 每个节点对应一个标签列表
         }
 
-        // 3. 动态初始化仓库相关容器（核心适配逻辑）
+        // 3. 动态初始化仓库相关容器
         initDepotQueues();
 
         // 5. 调用初始化方法
@@ -81,9 +81,6 @@ public class BidLabeling {
     private void initDepotQueues() {
         // 从Depots获取所有仓库索引（自动适配1/N个仓库）
         this.allDepotIndexes = new ArrayList<>(depots.getDepotIndexes());
-        if (allDepotIndexes.isEmpty()) {
-            throw new IllegalArgumentException("Depots中未配置任何仓库，无法初始化队列");
-        }
 
         // 初始化仓库→队列映射（每个仓库分配独立队列）
         this.depotForwardQueues = new HashMap<>(allDepotIndexes.size());
@@ -117,6 +114,8 @@ public class BidLabeling {
                 depot.setNearestDiffLabelDist(min(depot.getNearestDiffLabelDist(), currentDist));
             }
         }
+
+        initializeMultiDepotUnloadingLabels();
     }
 
     /* 算法主体 */
@@ -173,7 +172,7 @@ public class BidLabeling {
             order.setReducedCost(PriceCalculator.calculateRC(order, dualsOfRLMP));
         }
 
-        orderPool.sort(CommonUtils.dualComparator);
+        //orderPool.sort(CommonUtils.dualComparator);
 
 //        fences.SortValidArcFenceByOriginalValue();
 //        for(Depot depot : depots.getDepotList()){
@@ -184,7 +183,7 @@ public class BidLabeling {
     /* 核心修改：并行双向标号搜索（所有仓库同时拓展） */
     private void bidirectionalSearch() {
         int iterationCnt = 0;
-        initializeMultiDepotUnloadingLabels();
+
         this.startTime = CommonUtils.currentTimeInSecond();
 
         while (true) {
@@ -233,7 +232,7 @@ public class BidLabeling {
 
     // 基于Depots类初始化多仓库标签（强制起点=终点）
     private void initializeMultiDepotUnloadingLabels() {
-        // 遍历所有仓库，为每个仓库创建初始标签（适配任意数量）
+        // 遍历所有仓库，为每个仓库创建初始标签
         for (Integer depotIdx : allDepotIndexes) {
             // 前向初始标签
             BitSet forwardTabu = new BitSet(fences.getFenceNum());
@@ -294,18 +293,18 @@ public class BidLabeling {
                 Integer depotIdx = label.getStartDepotIdx();
                 if (isForward) {
                     // 前向标签：遍历当前仓库的后向标签
-                    for (List<Label> nodeLabels : labelPool) {
+                    for (List<Label> nodeLabels : this.labelPool){
                         for (Label backwardLabel : nodeLabels) {
-                            if (!backwardLabel.isForward() && Objects.equals(backwardLabel.getStartDepotIdx(), depotIdx)) {
+                            if (!backwardLabel.isForward() && Objects.equals(backwardLabel.getStartDepotIdx(), depotIdx) && backwardLabel.getVisitNum() >= Constants.MIN_VISIT_NUM) {
                                 this.labelConnect(label, backwardLabel);
                             }
                         }
                     }
                 } else {
                     // 后向标签：遍历当前仓库的前向标签
-                    for (List<Label> nodeLabels : labelPool) {
+                    for (List<Label> nodeLabels : this.labelPool){
                         for (Label forwardLabel : nodeLabels) {
-                            if (forwardLabel.isForward() && Objects.equals(forwardLabel.getStartDepotIdx(), depotIdx)) {
+                            if (forwardLabel.isForward() && Objects.equals(forwardLabel.getStartDepotIdx(), depotIdx) && forwardLabel.getVisitNum() >= Constants.MIN_VISIT_NUM) {
                                 this.labelConnect(forwardLabel, label);
                             }
                         }
@@ -350,7 +349,7 @@ public class BidLabeling {
                         label.getStartDepotIdx() // 关键：新标签继承原标签的仓库索引
                 );
 
-                // 调用 dominantAdd 加入标签池和对应仓库的队列
+                // 加入标签池和对应仓库的队列
                 this.dominantAdd(newLabel, nextNode);
             }
         }
@@ -360,7 +359,7 @@ public class BidLabeling {
         boolean isForward = label.isForward();
         Integer depotIdx = label.getStartDepotIdx();
 
-        // 1. 原有支配性检查（保持不变，筛选优质标签）
+        // 1. 支配性检查（保持不变，筛选优质标签）
         boolean canAdd = true;
         int li = 0;
         while (li < this.labelPool.get(fenceIdx - 1).size()) {
@@ -385,14 +384,10 @@ public class BidLabeling {
             // 按仓库索引获取对应队列，添加标签
             if (isForward) {
                 Queue<Label> forwardQueue = depotForwardQueues.get(depotIdx);
-                if (forwardQueue != null) {
-                    forwardQueue.add(label);
-                }
+                forwardQueue.add(label);
             } else {
                 Queue<Label> backwardQueue = depotBackwardQueues.get(depotIdx);
-                if (backwardQueue != null) {
-                    backwardQueue.add(label);
-                }
+                backwardQueue.add(label);
             }
         }
     }
