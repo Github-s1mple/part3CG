@@ -1,3 +1,4 @@
+import Utils.FenceVisualizer;
 import Utils.ResultPersistenceUtil;
 import algoCG.ResultProcess;
 import algoCG.CGSolve;
@@ -17,7 +18,7 @@ import static Utils.Initializer.scenarioInitializer;
 
 public class CGTest {
     public static void main(String[] args) throws IOException {
-        LocationResult firstStageResult = ResultPersistenceUtil.loadFirstStageResult("firstStageResult.json");
+        LocationResult firstStageResult = ResultPersistenceUtil.loadFirstStageResult("firstStageResult_test.json");
         Instance instance = new Instance(firstStageResult);
         long gaIterStartTime = System.currentTimeMillis();
         CGSolve cgSolve = new CGSolve(instance);
@@ -25,6 +26,12 @@ public class CGTest {
         long gaIterEndTime = System.currentTimeMillis();
         double gaIterCostTime = (gaIterEndTime - gaIterStartTime) / 1000.0;
         Orders orders = new Orders(optimalOrders);
+        //作图
+        orders.setFences(instance.getFences());
+        orders.generateFenceList();
+        ArrayList<Fence> baseFenceList = instance.getFences().getFenceList();
+        List<Fence> highlightFenceList = orders.getVisitedFences();
+        FenceVisualizer.plotFenceWithHighlight(baseFenceList, highlightFenceList);
         orders.setTime(gaIterCostTime);
         System.out.println("时间：" + orders.getTime());
         //ResultProcess resultProcess = new ResultProcess(orders);

@@ -4,10 +4,7 @@ import baseinfo.Constants;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.Objects;
+import java.util.*;
 
 @Setter
 @Getter
@@ -192,5 +189,33 @@ public class Fences {
             if(fence.getIndex() == 999) continue;
             sortValidArcFenceByOriginalValue(fence);
         }
+    }
+
+    public List<Fence> getFencesByIndexList(ArrayList<Integer> fenceIndexList) {
+        // 1. 入参校验：空列表直接返回空结果
+        List<Fence> result = new ArrayList<>();
+        if (fenceIndexList == null || fenceIndexList.isEmpty()) {
+            System.err.println("输入的围栏编号列表为空");
+            return result;
+        }
+
+        // 2. 遍历编号列表，匹配对应的Fence对象
+        for (Integer fenceIndex : fenceIndexList) {
+            // 跳过空编号
+            if (fenceIndex == null) {
+                System.err.println("检测到空的围栏编号，已跳过");
+                continue;
+            }
+            // 通过getFence方法获取围栏对象
+            Fence fence = getFence(fenceIndex);
+            if (fence != null) {
+                result.add(fence);
+            } else {
+                // 仅打印警告，不中断流程（保证有效数据仍能返回）
+                System.err.println("围栏编号 " + fenceIndex + " 不存在，已跳过");
+            }
+        }
+
+        return result;
     }
 }
