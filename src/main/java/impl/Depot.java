@@ -23,9 +23,10 @@ public class Depot {
     private final HashMap<Integer, Double> depotMap; // 围栏index→距离映射
     private int minDispatchNum;
     private int maxDispatchNum;
+    private double dClass;
 
     // 构造方法
-    public Depot(Integer index, double longitude, double latitude) {
+    public Depot(Integer index, double longitude, double latitude, double dClass) {
         this.index = index;
         this.longitude = longitude;
         this.latitude = latitude;
@@ -33,6 +34,7 @@ public class Depot {
         this.validArcFence = new ArrayList<>();
         this.constName = "D" + index;
         this.nearestDiffLabelDist = 9999.0;
+        this.dClass = dClass;
     }
 
     public void generateDistanceMap(List<double[]> fenceCoordinates){
@@ -59,7 +61,7 @@ public class Depot {
     }
 
     public Fence depot2Fence(Integer index){
-        Fence fence = new Fence(index, longitude, latitude, 0.0, 0.0, true);
+        Fence fence = new Fence(index, longitude, latitude, 0.0, 0.0, true, 999.0);
         fence.setDistanceMap(depotMap);
         fence.setFenceValue(0.0);
         fence.setMinDispatchNum(0.0);

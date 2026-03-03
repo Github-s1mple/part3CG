@@ -64,6 +64,7 @@ public class Initializer {
                     double lon = getCellNumericValue(row.getCell(1));
                     double lat = getCellNumericValue(row.getCell(2));
                     double totalDemand = getCellNumericValue(row.getCell(3));
+                    double fClass = getCellNumericValue(row.getCell(7));
 
                     // 创建Fence实例
                     Fence fence = new Fence(
@@ -72,7 +73,8 @@ public class Initializer {
                             lat,
                             totalDemand,
                             0.0,
-                            false
+                            false,
+                            fClass
                     );
 
                     fence.generateDistanceMap(distanceMatrix);
@@ -143,6 +145,7 @@ public class Initializer {
                 if (row == null) continue;
 
                 // 读取经纬度（C列和D列，索引2和3）
+                double dClass = getCellValueAsDouble(row.getCell(0));
                 double depotLon = getCellValueAsDouble(row.getCell(2));
                 double depotLat = getCellValueAsDouble(row.getCell(3));
 
@@ -152,7 +155,7 @@ public class Initializer {
                 }
 
                 // 创建Depot并计算距离映射
-                Depot depot = new Depot(-rowNum, depotLon, depotLat);
+                Depot depot = new Depot(-rowNum, depotLon, depotLat, dClass);
                 depot.generateDistanceMap(fenceCoordinates);
                 depotList.add(depot);
             }

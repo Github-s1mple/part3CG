@@ -29,8 +29,9 @@ public class Fence {
     private String constName;
     private Boolean isFakeFence;
     private Depot Xs;
+    private double fClass;
 
-    public Fence(Integer index, Double Lon, Double Lat, Double totalDemand, Double unitPrice, Boolean isFakeFence) {
+    public Fence(Integer index, Double Lon, Double Lat, Double totalDemand, Double unitPrice, Boolean isFakeFence, double Class) {
         this.index = index;
         this.lon = Lon;
         this.lat = Lat;
@@ -41,6 +42,7 @@ public class Fence {
         this.originalFenceValue = unitPrice;
         this.nearestDiffLabelDist = 9999.0;
         this.isFakeFence = isFakeFence;
+        this.fClass = Class;
     }
 
     public void generateDistanceMap(List<List<Double>> distanceMatrix){

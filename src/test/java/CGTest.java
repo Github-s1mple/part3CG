@@ -15,10 +15,11 @@ import java.util.*;
 
 import static Utils.CommonUtils.getCellValue;
 import static Utils.Initializer.scenarioInitializer;
+import static Utils.OrderExcelExporter.exportOrdersToXlsx;
 
 public class CGTest {
     public static void main(String[] args) throws IOException {
-        LocationResult firstStageResult = ResultPersistenceUtil.loadFirstStageResult("firstStageResult_test.json");
+        LocationResult firstStageResult = ResultPersistenceUtil.loadFirstStageResult("firstStageResult.json");
         Instance instance = new Instance(firstStageResult);
         long gaIterStartTime = System.currentTimeMillis();
         CGSolve cgSolve = new CGSolve(instance);
@@ -26,6 +27,7 @@ public class CGTest {
         long gaIterEndTime = System.currentTimeMillis();
         double gaIterCostTime = (gaIterEndTime - gaIterStartTime) / 1000.0;
         Orders orders = new Orders(optimalOrders);
+        exportOrdersToXlsx(orders, "order_detail.xlsx");
         //作图
         orders.setFences(instance.getFences());
         orders.generateFenceList();

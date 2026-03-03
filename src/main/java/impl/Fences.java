@@ -51,6 +51,10 @@ public class Fences {
         if (targetFence == null) {
             return;
         }
+
+        // 目标围栏的class（double类型）
+        double targetFenceClass = targetFence.getFClass();
+
         ArrayList<Integer> validArcFence = targetFence.getValidArcFence();
         if (validArcFence == null || validArcFence.isEmpty()) {
             return;
@@ -59,9 +63,14 @@ public class Fences {
             return;
         }
 
-        // 2. 第一步：过滤 - 移除deliverDemand < MIN_DISPATCH_NUM的围栏编号
+        // 2. 第一步：过滤 - 修正class对比逻辑（统一double类型 + 浮点精度）
         int originalSize = validArcFence.size();
         Iterator<Integer> iterator = validArcFence.iterator();
+        // 统计过滤原因，便于排查
+        int nullFenceCount = 0;
+        int diffClassCount = 0;
+        int lowDemandCount = 0;
+
         while (iterator.hasNext()) {
             Integer fenceId = iterator.next();
             Fence fence = getFence(fenceId);
@@ -69,12 +78,23 @@ public class Fences {
             // 处理无效围栏/空值：直接移除
             if (fence == null || fence.getDeliverDemand() == null) {
                 iterator.remove();
+                nullFenceCount++;
                 continue;
             }
 
-            // 核心过滤逻辑：deliverDemand < MIN_DISPATCH_NUM 则移除
+            // 核心修正：用double类型的getFClass()对比，且处理浮点精度
+            double currentFenceClass = fence.getFClass();
+            // 浮点值对比：误差小于1e-6视为相等
+            if (Math.abs(currentFenceClass - targetFenceClass) > 1e-6) {
+                iterator.remove();
+                diffClassCount++;
+                continue;
+            }
+
+            // 原有核心过滤逻辑：deliverDemand < MIN_DISPATCH_NUM 则移除
             if (fence.getDeliverDemand() < Constants.MIN_DISPATCH_NUM) {
                 iterator.remove();
+                lowDemandCount++;
             }
         }
 
@@ -84,7 +104,7 @@ public class Fences {
             return;
         }
 
-        // 3. 第二步：排序 - 按originalFenceValue降序
+        // 3. 第二步：排序 - 修正class校验逻辑（浮点精度）
         validArcFence.sort(new Comparator<Integer>() {
             @Override
             public int compare(Integer fenceId1, Integer fenceId2) {
@@ -95,6 +115,13 @@ public class Fences {
                 if (fence1 == null && fence2 == null) return 0;
                 if (fence1 == null) return 1;
                 if (fence2 == null) return -1;
+
+                // 修正：排序前校验class（浮点精度）
+                double class1 = fence1.getFClass();
+                double class2 = fence2.getFClass();
+                // 不同class的放到后面
+                if (Math.abs(class1 - targetFenceClass) > 1e-6) return 1;
+                if (Math.abs(class2 - targetFenceClass) > 1e-6) return -1;
 
                 // 获取originalFenceValue（空值默认0）
                 double value1 = fence1.getFenceValue() == 0.0 ? fence1.getOriginalFenceValue() : fence1.getFenceValue();
@@ -110,7 +137,7 @@ public class Fences {
             }
         });
 
-        // 4. 重新赋值 + 日志输出
+        // 4. 重新赋值
         targetFence.setValidArcFence(validArcFence);
     }
 
@@ -119,6 +146,10 @@ public class Fences {
         if (depot == null) {
             return;
         }
+
+        // 获取仓库的class值（double类型，和Fence的FClass对应）
+        double depotFClass = depot.getDClass();
+
         ArrayList<Integer> validArcFence = depot.getValidArcFence();
         if (validArcFence == null || validArcFence.isEmpty()) {
             return;
@@ -127,8 +158,14 @@ public class Fences {
             return;
         }
 
-        // 2. 第一步：过滤 - 移除deliverDemand < MIN_DISPATCH_NUM的围栏编号
+        // 2. 第一步：过滤 - 新增class相等判断（浮点精度） + 原有deliverDemand过滤
+        int originalSize = validArcFence.size();
         Iterator<Integer> iterator = validArcFence.iterator();
+        // 统计过滤原因，便于排查
+        int nullFenceCount = 0;
+        int diffClassCount = 0;
+        int lowDemandCount = 0;
+
         while (iterator.hasNext()) {
             Integer fenceId = iterator.next();
             Fence fence = getFence(fenceId);
@@ -136,12 +173,22 @@ public class Fences {
             // 处理无效围栏/空值：直接移除
             if (fence == null || fence.getDeliverDemand() == null) {
                 iterator.remove();
+                nullFenceCount++;
                 continue;
             }
 
-            // 核心过滤逻辑：deliverDemand < MIN_DISPATCH_NUM 则移除
+            // 核心新增：过滤不同class的围栏（double类型 + 浮点精度）
+            double currentFenceClass = fence.getFClass();
+            if (Math.abs(currentFenceClass - depotFClass) > 1e-6) {
+                iterator.remove();
+                diffClassCount++;
+                continue;
+            }
+
+            // 原有核心过滤逻辑：deliverDemand < MIN_DISPATCH_NUM 则移除
             if (fence.getDeliverDemand() < Constants.MIN_DISPATCH_NUM) {
                 iterator.remove();
+                lowDemandCount++;
             }
         }
 
@@ -151,7 +198,7 @@ public class Fences {
             return;
         }
 
-        // 3. 第二步：排序 - 按originalFenceValue降序
+        // 3. 第二步：排序 - 按originalFenceValue降序（新增class校验兜底）
         validArcFence.sort(new Comparator<Integer>() {
             @Override
             public int compare(Integer fenceId1, Integer fenceId2) {
@@ -162,6 +209,12 @@ public class Fences {
                 if (fence1 == null && fence2 == null) return 0;
                 if (fence1 == null) return 1;
                 if (fence2 == null) return -1;
+
+                // 新增：排序前再次校验class（防止极端情况）
+                double class1 = fence1.getFClass();
+                double class2 = fence2.getFClass();
+                if (Math.abs(class1 - depotFClass) > 1e-6) return 1;
+                if (Math.abs(class2 - depotFClass) > 1e-6) return -1;
 
                 // 获取originalFenceValue（空值默认0）
                 double value1 = fence1.getFenceValue() == 0.0 ? fence1.getOriginalFenceValue() : fence1.getFenceValue();
@@ -177,7 +230,7 @@ public class Fences {
             }
         });
 
-        // 4. 重新赋值 + 日志输出
+        // 4. 重新赋值
         depot.setValidArcFence(validArcFence);
     }
 
