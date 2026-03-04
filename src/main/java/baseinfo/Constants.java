@@ -33,7 +33,7 @@ public class Constants {
     // 小规模测试数据的文件路径
     public static final String allPointsTestFilePath = "all_points_test.xlsx";
     public static final String candidatePointsTestFilePath = "candidate_points_test.xlsx";
-    public static final String scenariosFileFolderPath = "生鲜日订单模拟结果_5";
+    public static final String scenariosFileFolderPath = "生鲜日订单模拟结果_10";
     public static final String CACHE_SAVE_PATH = "firstStageResult.json";
 
     // 算法控制参数
@@ -44,7 +44,7 @@ public class Constants {
     public static final Double DUAL_MULTIPLIER = 1.0; //对偶值额外调参（标准值是1）
     public static final Integer OUTPUT_INTERVAL = 1000;
     public static final Integer ITERATION_COLUMN_NUM = 100; //每轮生成的列数（对偶值更新频率）
-    public static final Integer SCENARIO_NUM = 5;
+    public static final Integer SCENARIO_NUM = 10;
 
     // GA算法控制参数
     public static final Integer MAX_ITER = 20; // 最大迭代次数
