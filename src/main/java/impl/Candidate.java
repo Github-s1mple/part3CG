@@ -18,14 +18,16 @@ public class Candidate {
     private final double latitude;  // 纬度
     private final HashMap<Integer, Double> candidateMap; // 围栏index→距离映射
     private double buildCost;
+    private double dClass;
 
     // 构造方法
-    public Candidate(Integer index, double longitude, double latitude, double buildCost) {
+    public Candidate(Integer index, double longitude, double latitude, double buildCost, double dClass) {
         this.index = index;
         this.longitude = longitude;
         this.latitude = latitude;
         this.candidateMap = new HashMap<>();
         this.buildCost = buildCost;
+        this.dClass = dClass;
     }
 
     public void generateDistanceMap(List<double[]> fenceCoordinates){

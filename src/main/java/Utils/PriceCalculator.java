@@ -1,5 +1,6 @@
 package Utils;
 
+import baseinfo.Constants;
 import impl.Carrier;
 import impl.Fence;
 import impl.Fences;
@@ -65,7 +66,7 @@ public class PriceCalculator {
             Fence fence = order.getFences().getFence(fenceId);
 
             // 累加当前围栏的价值（装载量 × 单位价值）
-            totalValue += load * fence.getOriginalFenceValue();
+            totalValue += load * (Constants.BIKE_STABLE_COST_PER_ORDER + fence.getOriginalFenceValue());
         }
 
         return totalValue - order.getCarrierCost();
@@ -81,7 +82,7 @@ public class PriceCalculator {
             Fence fence = order.getFences().getFence(fenceId);
 
             // 累加当前围栏的价值（装载量 × 单位价值）
-            totalValue += load * fence.getFenceValue();
+            totalValue += load * (Constants.BIKE_STABLE_COST_PER_ORDER + fence.getFenceValue());
         }
 
         return totalValue - order.getCarrierCost();

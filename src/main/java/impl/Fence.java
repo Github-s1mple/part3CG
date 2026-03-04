@@ -45,12 +45,13 @@ public class Fence {
         this.fClass = Class;
     }
 
-    public void generateDistanceMap(List<List<Double>> distanceMatrix){
+    public void generateDistanceMap(List<List<Double>> distanceMatrix, double fClass){
+        int classIndex = (int)fClass;
         List<Double> distances = distanceMatrix.get(index - 1);
         for (Integer targetIndex = 0; targetIndex < distances.size(); targetIndex++) {
             Double distance = distances.get(targetIndex);
             distanceMap.put(targetIndex + 1, distance);
-            if (distance <= Constants.TRUCK_MAX_DISTANCE * Constants.EXPAND_STEP) {
+            if (distance <= Constants.TRUCK_MAX_DISTANCE * Constants.EXPAND_STEP.get(classIndex)) {
                 validArcFence.add(targetIndex + 1);
             }
         }

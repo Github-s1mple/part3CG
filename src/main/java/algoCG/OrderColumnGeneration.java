@@ -156,8 +156,9 @@ public class OrderColumnGeneration {
             }
 
             // 4. 添加新列到二阶段主问题
-            addRLMPColumns(newOrders);
             allOrders.addAll(newOrders);
+            allOrders.sort(CommonUtils.dualComparator);
+            overwriteRLMPColumns(allOrders);
 
             // 5. 求解二阶段主问题并更新对偶值
             solveRLMPAndUpdateDuals();
@@ -283,6 +284,63 @@ public class OrderColumnGeneration {
         RLMPSolver.update();
     }
 
+    /**
+     * 覆盖主问题中的所有列（清空原有列，重新添加筛选后的列）
+     * 核心：删除所有旧变量→清空缓存→重新添加新列→更新目标函数和约束
+     * @param filteredOrders 筛选后需要保留的Order列表
+     * @throws GRBException Gurobi求解器异常
+     */
+    private void overwriteRLMPColumns(List<Order> filteredOrders) throws GRBException {
+        // ========== 第一步：清空原有列（修复remove方法参数问题） ==========
+        // 1.1 循环删除主问题中所有已创建的路径变量（兼容所有Gurobi版本）
+        if (!RLMPVariables.isEmpty()) {
+            // 遍历变量集合，逐个删除
+            for (GRBVar var : RLMPVariables.values()) {
+                if (var != null) { // 空值校验，避免空指针
+                    RLMPSolver.remove(var);
+                }
+            }
+            // 清空变量缓存（关键：避免旧变量与新变量冲突）
+            RLMPVariables.clear();
+            orderIdMap.clear();
+        }
+
+        // ========== 以下逻辑保持不变 ==========
+        GRBLinExpr newObjExpr = new GRBLinExpr();
+
+        for (Order order : filteredOrders) {
+            String orderId = String.valueOf(order.getOrderId());
+            double pathProfit = order.getOriginalPrice();
+            GRBVar pathVar = RLMPSolver.addVar(
+                    0.0,
+                    1.0,
+                    pathProfit,
+                    GRB.CONTINUOUS,
+                    "path_" + orderId
+            );
+
+            newObjExpr.addTerm(pathProfit, pathVar);
+            RLMPVariables.put(orderId, pathVar);
+            orderIdMap.put(orderId, order);
+
+            updateFenceConstraintCoeff(order, pathVar);
+            updateCarrierConstraintCoeff(order, pathVar);
+
+            if (outputFlag) {
+                System.out.printf("重新添加筛选后路径：ID=%s，收益=%.2f，负载围栏数=%d，载具=%s，距离=%.2f%n",
+                        orderId, pathProfit, order.getLoads().size(),
+                        (order.getCarrier() != null ? order.getCarrier().getIndex() : "无"),
+                        order.getDistance());
+            }
+        }
+
+        this.RLMPSolver.setObjective(newObjExpr, GRB.MAXIMIZE);
+        RLMPSolver.update();
+
+        if (outputFlag) {
+            System.out.println("主问题列覆盖完成，当前保留列数：" + filteredOrders.size());
+        }
+    }
 
     /**
      * 更新围栏约束系数

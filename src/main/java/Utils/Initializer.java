@@ -11,8 +11,6 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -77,7 +75,7 @@ public class Initializer {
                             fClass
                     );
 
-                    fence.generateDistanceMap(distanceMatrix);
+                    fence.generateDistanceMap(distanceMatrix, fClass);
                     if (result != null){
                         Integer targetDepot = result.getExtraAllocation().get(fence.getIndex());
                         for (Depot depot : depotList) {
@@ -85,7 +83,7 @@ public class Initializer {
                                 fence.setXs(depot);
                                 double distance = depot.getDistance(fence);
                                 if(distance < 0.01) fence.setOriginalFenceValue(0.0001);
-                                else fence.setOriginalFenceValue(distance * Constants.BIKE_COST_PER_METER_PER_ORDER * 1000);// 即每单骑手直接配送的成本
+                                else fence.setOriginalFenceValue(distance * Constants.BIKE_COST_PER_KILOMETER_PER_ORDER);// 即每单骑手直接配送的成本
                                 double selfPickDemand = calculateSelfPickupProbability(distance) * totalDemand;
                                 fence.setSelfDemand(selfPickDemand);
                                 fence.setDeliverDemand(totalDemand - selfPickDemand);
@@ -156,7 +154,7 @@ public class Initializer {
 
                 // 创建Depot并计算距离映射
                 Depot depot = new Depot(-rowNum, depotLon, depotLat, dClass);
-                depot.generateDistanceMap(fenceCoordinates);
+                depot.generateDistanceMap(fenceCoordinates, dClass);
                 depotList.add(depot);
             }
         } catch (IOException e) {
@@ -218,13 +216,13 @@ public class Initializer {
             for (int rowNum = 1; rowNum <= sheet.getLastRowNum(); rowNum++) {
                 Row row = sheet.getRow(rowNum);
                 if (row == null) continue;
-
+                double dClass = getCellValueAsDouble(row.getCell(0));
                 Double candidateLon = convertNaNToNull(getCellValueAsDouble(row.getCell(2)));
                 Double candidateLat = convertNaNToNull(getCellValueAsDouble(row.getCell(3)));
                 Double candidateCost = convertNaNToNull(getCellValueAsDouble(row.getCell(4)));
 
                 // 创建Candidate并计算到所有围栏的距离
-                Candidate candidate = new Candidate(-rowNum, candidateLon, candidateLat, candidateCost);
+                Candidate candidate = new Candidate(-rowNum, candidateLon, candidateLat, candidateCost, dClass);
                 candidate.generateDistanceMap(fenceCoordinates);
                 candidateList.add(candidate);
             }

@@ -37,7 +37,8 @@ public class Depot {
         this.dClass = dClass;
     }
 
-    public void generateDistanceMap(List<double[]> fenceCoordinates){
+    public void generateDistanceMap(List<double[]> fenceCoordinates, double dClass){
+        int classIndex = (int)dClass;
         for (Integer index = 0; index < fenceCoordinates.size(); index++) {
             double[] fence = fenceCoordinates.get(index);
             // 调用MapDistance的球面距离计算方法
@@ -46,7 +47,7 @@ public class Depot {
                     fence[1], fence[0]   // 围栏的纬度（fence[1]）、经度（fence[0]）
             );
             depotMap.put(index + 1, distance);
-            if (distance <= Constants.TRUCK_MAX_DISTANCE * Constants.EXPAND_STEP){
+            if (distance <= Constants.TRUCK_MAX_DISTANCE * Constants.EXPAND_STEP.get(classIndex)){
                 validArcFence.add(index + 1);
             }
         }

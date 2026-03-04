@@ -262,7 +262,7 @@ public class FenceVisualizer {
             Color pointColor = interpolateColor(MIN_DEMAND_COLOR, MAX_DEMAND_COLOR, ratio);
 
             // 系列名简化为需求值，避免图例冗余
-            String seriesName = String.format("需求 %.0f", fence.getDeliverDemand());
+            String seriesName = String.format("需求 %d", fence.getIndex());
             XYSeries baseSeries = chart.addSeries(seriesName, lon, lat);
             baseSeries.setXYSeriesRenderStyle(XYSeries.XYSeriesRenderStyle.Scatter);
             baseSeries.setMarker(SeriesMarkers.CIRCLE);
@@ -288,7 +288,7 @@ public class FenceVisualizer {
         }
 
         // 6. 显示图表
-        //new SwingWrapper(chart).displayChart();
+        new SwingWrapper(chart).displayChart();
     }
 
     // ====================== 工具方法 ======================

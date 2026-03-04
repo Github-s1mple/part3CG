@@ -24,7 +24,7 @@ public class BidLabeling {
 
     // 算法控制参数
     private Integer timeLimit;
-    private Integer orderLimit;
+    private Integer orderLimit; // 单个仓库的订单阈值（原全局阈值改为单仓库阈值）
     private Boolean outputFlag = true;     // 过程信息输出开关
     private Double timeRecord = 0.0;        // 算法耗时记录
 
@@ -42,8 +42,9 @@ public class BidLabeling {
     private Map<Integer, Integer> depotExpandCount;
     private Map<Integer, Integer> depotOrderCount;
 
+    // 核心修改：每个仓库独立的订单池（替代原全局orderPool）
+    private Map<Integer, List<Order>> depotOrderPools; // 仓库索引 -> 该仓库的订单池
     // 结果容器与辅助组件
-    private List<Order> orderPool = new ArrayList<>(); // 最终订单池
     private final List<Carrier> carrierList;           // 车型列表
     private final LoadingAlgorithm loadingAlgorithm;   // 装卸方案求解器
     private final double dual_multiplier;
@@ -71,6 +72,9 @@ public class BidLabeling {
         // 3. 动态初始化仓库相关容器
         initDepotQueues();
 
+        // 新增：初始化每个仓库的独立订单池
+        initDepotOrderPools();
+
         // 5. 调用初始化方法
         this.initialize();
     }
@@ -92,6 +96,16 @@ public class BidLabeling {
             depotBackwardQueues.put(depotIdx, new LinkedList<>()); // 后向队列
             depotExpandCount.put(depotIdx, 0); // 初始化扩展次数为0
             depotOrderCount.put(depotIdx, 0); // 初始化订单数为0
+        }
+    }
+
+    /**
+     * 新增：初始化每个仓库的独立订单池
+     */
+    private void initDepotOrderPools() {
+        this.depotOrderPools = new HashMap<>(allDepotIndexes.size());
+        for (Integer depotIdx : allDepotIndexes) {
+            depotOrderPools.put(depotIdx, new ArrayList<>()); // 每个仓库初始化空订单池
         }
     }
 
@@ -127,16 +141,47 @@ public class BidLabeling {
         // 更新围栏价值
         this.updateFenceValue(dualsOfRLMP);
 
-        // 若初始orderPool超出orderLimit直接输出
-        if (this.orderPool.size() >= this.orderLimit) {
+        // 检查所有仓库的订单池是否均达到阈值
+        if (isAllDepotOrderPoolsReachLimit()) {
             return generateOutputOrders();
         }
+
         // 双向标号搜索（核心修改：并行拓展）
         this.bidirectionalSearch();
-        // 排序结果
-        this.orderPool.sort(CommonUtils.dualComparator);
+
+        // 对每个仓库的订单池单独排序
+        sortDepotOrderPools();
 
         return generateOutputOrders();
+    }
+
+    /**
+     * 新增：检查所有仓库的订单池是否都达到设定阈值
+     * @return 所有仓库均达标返回true，否则false
+     */
+    private boolean isAllDepotOrderPoolsReachLimit() {
+        if (this.orderLimit == null || this.orderLimit <= 0) {
+            return false;
+        }
+        for (Integer depotIdx : allDepotIndexes) {
+            List<Order> depotPool = depotOrderPools.get(depotIdx);
+            if (depotPool == null || depotPool.size() < this.orderLimit) {
+                return false; // 任意仓库未达标则返回false
+            }
+        }
+        return true;
+    }
+
+    /**
+     * 新增：对每个仓库的独立订单池单独排序
+     */
+    private void sortDepotOrderPools() {
+        for (Integer depotIdx : allDepotIndexes) {
+            List<Order> depotPool = depotOrderPools.get(depotIdx);
+            if (depotPool != null && !depotPool.isEmpty()) {
+                depotPool.sort(CommonUtils.dualComparator); // 沿用原有排序器
+            }
+        }
     }
 
     /**
@@ -149,13 +194,14 @@ public class BidLabeling {
         int totalOrder = 0;
         for (Integer depotIdx : allDepotIndexes) {
             int expandCount = depotExpandCount.getOrDefault(depotIdx, 0);
-            int orderCount = depotOrderCount.getOrDefault(depotIdx, 0);
+            // 核心修改：统计各仓库独立订单池的数量
+            int orderCount = depotOrderPools.get(depotIdx).size();
             totalExpand += expandCount;
             totalOrder += orderCount;
-            System.out.printf("仓库%d：拓展次数=%d，有效订单数=%d",
+            System.out.printf("仓库%d：拓展次数=%d，有效订单数=%d%n",
                     depotIdx, expandCount, orderCount);
         }
-        System.out.printf("累计：拓展次数=%d，有效订单数=%d",
+        System.out.printf("累计：拓展次数=%d，有效订单数=%d%n",
                 totalExpand, totalOrder);
         System.out.println("==========================================\n");
     }
@@ -168,11 +214,15 @@ public class BidLabeling {
             fence.setFenceValue(fence.getOriginalFenceValue() - dualsOfRLMP.get(fence.getConstName()) * dual_multiplier);
         }
 
-        for (Order order : this.orderPool) {
-            order.setReducedCost(PriceCalculator.calculateRC(order, dualsOfRLMP));
+        // 核心修改：遍历所有仓库的订单池更新约减成本
+        for (Integer depotIdx : allDepotIndexes) {
+            List<Order> depotPool = depotOrderPools.get(depotIdx);
+            if (depotPool != null) {
+                for (Order order : depotPool) {
+                    order.setReducedCost(PriceCalculator.calculateRC(order, dualsOfRLMP));
+                }
+            }
         }
-
-        //orderPool.sort(CommonUtils.dualComparator);
 
 //        fences.SortValidArcFenceByOriginalValue();
 //        for(Depot depot : depots.getDepotList()){
@@ -184,13 +234,17 @@ public class BidLabeling {
     private void bidirectionalSearch() {
         int iterationCnt = 0;
 
-        this.startTime = CommonUtils.currentTimeInSecond();
-
         while (true) {
             boolean hasExpanded = false; // 标记本次迭代是否有拓展行为
 
             // ========== 核心逻辑：遍历所有仓库，各拓展一个标签（并行） ==========
             for (Integer depotIdx : allDepotIndexes) {
+                // 核心修改：若当前仓库订单池已达阈值，跳过拓展
+                List<Order> depotPool = depotOrderPools.get(depotIdx);
+                if (depotPool != null && depotPool.size() >= this.orderLimit) {
+                    continue;
+                }
+
                 // 拓展当前仓库的前向队列（最多1个标签）
                 Queue<Label> forwardQueue = depotForwardQueues.get(depotIdx);
                 if (forwardQueue != null && !forwardQueue.isEmpty()) {
@@ -210,10 +264,10 @@ public class BidLabeling {
                 }
             }
 
-            // 结束条件：无拓展行为 或 超时 或 订单数达标
+            // 结束条件：无拓展行为 或 超时 或 所有仓库订单池均达标
             if (!hasExpanded
                     || CommonUtils.currentTimeInSecond() - this.startTime > this.timeLimit
-                    || this.orderPool.size() >= this.orderLimit) {
+                    || isAllDepotOrderPoolsReachLimit()) {
                 break;
             }
 
@@ -501,15 +555,17 @@ public class BidLabeling {
         }
 
         order.setReducedCost(PriceCalculator.calculateRC(order, dualsOfRLMP));
-        // 仅统计有效订单（未被支配且成功加入池）
+        // 核心修改：将订单存入对应仓库的独立订单池
         Integer depotIdx = order.getDepot();
+        List<Order> depotPool = depotOrderPools.get(depotIdx);
+
+        // 移除重复订单（原逻辑适配）
         if (sameNodeSetOrder != null) {
-            this.orderPool.remove(sameNodeSetOrder);
-            depotOrderCount.put(depotIdx, depotOrderCount.get(depotIdx) - 1);
+            depotPool.remove(sameNodeSetOrder);
         }
-        depotOrderCount.put(depotIdx, depotOrderCount.get(depotIdx) + 1);
+        // 新增有效订单到对应仓库池
+        depotPool.add(order);
         this.visited2order.put(routeKey, order);
-        this.orderPool.add(order);
     }
 
     private Order loading(Route route) {
@@ -527,10 +583,29 @@ public class BidLabeling {
         return order;
     }
 
+    /**
+     * 核心修改：合并所有仓库的订单池并输出
+     * @return 合并后的全局订单列表
+     */
     private List<Order> generateOutputOrders() {
-        int takeNum = min(orderLimit, orderPool.size());
-        List<Order> outputOrders = new ArrayList<>(orderPool.subList(0, takeNum));
-        this.orderPool = new ArrayList<>(orderPool.subList(takeNum, orderPool.size()));
+        List<Order> outputOrders = new ArrayList<>();
+
+        // 遍历所有仓库，合并其订单池
+        for (Integer depotIdx : allDepotIndexes) {
+            List<Order> depotPool = depotOrderPools.get(depotIdx);
+            if (depotPool != null && !depotPool.isEmpty()) {
+                // 按阈值截取每个仓库的订单（若需要）
+                int takeNum = min(orderLimit, depotPool.size());
+                outputOrders.addAll(depotPool.subList(0, takeNum));
+
+                // 保留剩余订单（供下次迭代）
+                depotOrderPools.put(depotIdx, new ArrayList<>(depotPool.subList(takeNum, depotPool.size())));
+            }
+        }
+
+        // 清空全局去重映射（可选，根据业务需求）
+        this.visited2order.clear();
+
         return outputOrders;
     }
 }

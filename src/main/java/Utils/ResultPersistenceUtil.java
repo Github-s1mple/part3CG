@@ -7,12 +7,12 @@ import impl.LocationResult;
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 
+import static baseinfo.Constants.CACHE_SAVE_PATH;
+
 /**
  * 持久化工具类：保存/读取 LocationResult 到本地文件
  */
 public class ResultPersistenceUtil {
-    // 保存路径（可自定义，比如项目根目录下的 result 文件夹）
-    private static final String SAVE_PATH = "firstStageResult.json";
     // Gson 实例（配置格式化输出，便于查看）
     private static final Gson GSON = new GsonBuilder()
             .setPrettyPrinting() // 格式化JSON
@@ -26,7 +26,7 @@ public class ResultPersistenceUtil {
      */
     public static void saveFirstStageResult(LocationResult result) throws IOException {
         // 1. 创建文件父目录（避免路径不存在）
-        File file = new File(SAVE_PATH);
+        File file = new File(CACHE_SAVE_PATH);
         File parentDir = file.getParentFile();
         if (parentDir != null && !parentDir.exists()) {
             parentDir.mkdirs();
@@ -65,7 +65,7 @@ public class ResultPersistenceUtil {
      * 可选：删除已保存的结果文件（比如数据过期时）
      */
     public static void deleteSavedResult() {
-        File file = new File(SAVE_PATH);
+        File file = new File(CACHE_SAVE_PATH);
         if (file.exists() && file.delete()) {
             System.out.println("已删除旧的 FirstStageResult 文件");
         }

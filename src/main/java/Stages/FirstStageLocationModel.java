@@ -46,6 +46,7 @@ public class FirstStageLocationModel {
     // 存储固定的O_i取值（key=候选点ID，value=0或1，为空表示不固定）
     private Map<Integer, Integer> fixedOValues;
     private double totalCost;
+    private double distinctTotalDemand = 0.0;
     private boolean isFirstIter = true;
 
     /**
@@ -140,7 +141,7 @@ public class FirstStageLocationModel {
 
     /**
      * 设置目标函数：最小化候选点固定成本与第二阶段期望成本之和
-     * 数学表达：min Σ(f_i·O_i) + 全配送成本 - θ
+     * 数学表达：min Σ(f_i·O_i) + 全配送成本 + 单运营成本
      * @throws GRBException 目标函数设置可能抛出的异常
      */
     public void setObjective() throws GRBException {
@@ -155,21 +156,24 @@ public class FirstStageLocationModel {
         }
 
         // 2. 骑手配送成本项
-        double unitTransCost = Constants.BIKE_COST_PER_METER_PER_ORDER; // 单位距离运输成本（元/米）
+        double unitTransCost = Constants.BIKE_COST_PER_KILOMETER_PER_ORDER; // 单位距离运输成本（元/米）
         for (int i : N) {
             Fence fence = fences.getFence(i);
             for (int j : C) {
                 String xName = String.format("Xs_%d_%d", i, j);
                 GRBVar xVar = varMap.get(xName);
                 if (xVar == null) continue;
-
+                distinctTotalDemand += fence.getTotalDemand();
                 // 计算路径i→j的距离（米）
                 HashMap<Integer, Double> distMap = candidateToFenceDist.get(- j - 1);
                 double dist = distMap.get(i);
                 double bikeDemand = (1 - calculateSelfPickupProbability(dist)) * fence.getTotalDemand();
-                objExpr.addTerm(bikeDemand * unitTransCost * dist * 1000, xVar);
+                objExpr.addTerm(bikeDemand * (Constants.BIKE_STABLE_COST_PER_ORDER + unitTransCost * dist), xVar);
             }
         }
+
+        // 3. 单均运营成本项
+        objExpr.addConstant(distinctTotalDemand * Constants.DEPOT_STABLE_COST_PER_ORDER);
 
         // 设置最小化目标
         model.setObjective(objExpr, GRB.MINIMIZE);
