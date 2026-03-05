@@ -33,13 +33,13 @@ public class Constants {
     // 小规模测试数据的文件路径
     public static final String allPointsTestFilePath = "all_points_test.xlsx";
     public static final String candidatePointsTestFilePath = "candidate_points_test.xlsx";
-    public static final String scenariosFileFolderPath = "生鲜日订单模拟结果_10";
+    public static final String scenariosFileFolderPath = "生鲜日订单模拟结果_5";
     public static final String CACHE_SAVE_PATH = "firstStageResult.json";
 
     // 算法控制参数
     public static final Integer M = 10000000; // 一个足够大的正数
-    public static final Integer MAX_RLMP_COLUMNS = 500000;
-    public static final Integer ITERATION_TIME_LIMIT = 300; // 列生成算法的总时间（baseline不适用）
+    public static final Integer MAX_RLMP_COLUMNS = 300000;
+    public static final Integer CG_TIME_LIMIT = 240; // 列生成算法的总时间（baseline不适用）
     public static final Double RMPSOLVE_PROPORTION = 0.05; // RMP求解时间占比
     public static final Double DUAL_MULTIPLIER = 1.0; //对偶值额外调参（标准值是1）
     public static final Integer OUTPUT_INTERVAL = 1000;
@@ -47,6 +47,6 @@ public class Constants {
     public static final Integer SCENARIO_NUM = 10;
 
     // GA算法控制参数
-    public static final Integer MAX_ITER = 20; // 最大迭代次数
+    public static final Integer MAX_ITER = 5; // 最大迭代次数
     public static final Double GAP_THRESHOLD = 1e-4;
 }

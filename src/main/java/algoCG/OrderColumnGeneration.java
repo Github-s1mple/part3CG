@@ -129,7 +129,7 @@ public class OrderColumnGeneration {
         List<Order> allOrders = new ArrayList<>();
 
         // 总时间限制
-        int totalTimeLimit = (int) (Constants.ITERATION_TIME_LIMIT * (1 - Constants.RMPSOLVE_PROPORTION));
+        int totalTimeLimit = (int) (Constants.CG_TIME_LIMIT * (1 - Constants.RMPSOLVE_PROPORTION));
         System.out.println("算法初始化完成，开始进行列生成...");
         // 循环条件：剩余时间>0 且 未超过最大列数
         while (true) {

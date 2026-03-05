@@ -24,7 +24,7 @@ public class CGSolve {
             List<Order> allColumns = cg.solve(); // 生成的所有列
             // 2. 调用最终主问题求解器
             finalSolver = new RLMPSolve(allColumns, instance);
-            finalSolver.setTimeLimit((int) (Constants.ITERATION_TIME_LIMIT * Constants.RMPSOLVE_PROPORTION));
+            finalSolver.setTimeLimit((int) (Constants.CG_TIME_LIMIT * Constants.RMPSOLVE_PROPORTION));
             // 最优订单组合
             return finalSolver.solveRLMP();
 

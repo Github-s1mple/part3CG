@@ -345,8 +345,8 @@ public class FirstStageLocationModel {
 
             // 输出求解结果摘要
             this.totalCost = model.get(GRB.DoubleAttr.ObjVal);
-            System.out.println("最优总成本：" + df.format(totalCost) + " 元");
-            System.out.println("选中的候选点数量：" + countSelectedCandidates());
+            System.out.println("一阶段最优总成本：" + df.format(totalCost) + " 元");
+            //System.out.println("选中的候选点数量：" + countSelectedCandidates());
 
             // 输出详细信息
             if (outputFlag) {
