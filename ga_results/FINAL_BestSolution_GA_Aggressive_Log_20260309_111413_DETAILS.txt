@@ -1,0 +1,8 @@
+=== FINAL OPTIMAL SOLUTION DETAILS ===
+Total Iterations Performed: 11
+Final Best Cost: 51379.970478
+Timestamp: Mon Mar 09 21:13:01 CST 2026
+--------------------------------------------------------------------------------
+Selected Candidate IDs: -9, -2, -11, -21, -29, -16
+
+Full Solution Map: {-9=1, -2=1, -11=1, -21=1, -29=1, -16=1}

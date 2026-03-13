@@ -29,7 +29,7 @@ public class Constants {
 
     // 完整数据的文件路径
     public static final String allPointsFilePath = "all_points.xlsx";
-    public static final String candidatePointsFilePath = "candidate_points.xlsx";
+    public static final String candidatePointsFilePath = "candidate_points_4_gai.xlsx";
     // 小规模测试数据的文件路径
     public static final String allPointsTestFilePath = "all_points_test.xlsx";
     public static final String candidatePointsTestFilePath = "candidate_points_test.xlsx";

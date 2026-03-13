@@ -18,11 +18,8 @@ import java.util.stream.Collectors;
 import static Utils.CommonUtils.getKeyString;
 
 /**
- * 【重构版 - 即时存档】针对高成本求解器的激进遗传算法
- *
- * 核心改进策略：
- * 1. 动态高变异率 + 停滞重启机制。
- * 2. 【新增】每轮迭代后立即追加保存日志，防止意外中断导致数据丢失。
+ * 【修复版】针对高成本求解器的激进遗传算法
+ * 修复点：移除 FitnessDetails 中不存在的 getValue() 调用，改为直接访问 public 字段。
  */
 public class GAIteration {
     private Scenarios scenarios;
@@ -45,7 +42,7 @@ public class GAIteration {
     private double minMutationRate = 0.10;
     private int maxGroupsToMutateRatio = 30;
 
-    private int maxGaIterations = 25;
+    private int maxGaIterations = 10;
 
     // 停滞控制
     private int stagnationThreshold = 3;
@@ -56,19 +53,32 @@ public class GAIteration {
     private FirstStageLocationModel firstStage;
     private InputData inputData;
 
-    // ===================== 【修改】文件配置 =====================
+    // ===================== 文件配置 =====================
     private static final String OUTPUT_DIR = "ga_results";
     private static final String FILE_PREFIX = "GA_Aggressive_Log_";
-    private File currentLogFile = null; // 持有一个文件引用，避免重复创建文件名
-    private boolean fileHeaderWritten = false; // 标记表头是否已写入
+    private File currentLogFile = null;
+    private boolean fileHeaderWritten = false;
     private final Random random = new Random();
+
+    // ===================== 【修复】内部类：存储详细的成本构成 =====================
+    private static class FitnessDetails {
+        // 改为 public 字段，方便直接访问，无需 getter
+        public double totalCost;          // 最终目标函数值 (一阶段 - 二阶段)
+        public double stage1Cost;         // 一阶段建设/配送成本
+        public double stage2Benefit;      // 二阶段期望收益 (减少的成本)
+
+        public FitnessDetails(double total, double s1, double s2) {
+            this.totalCost = total;
+            this.stage1Cost = s1;
+            this.stage2Benefit = s2;
+        }
+    }
 
     public GAIteration(Scenarios scenarios) {
         this.scenarios = scenarios;
         this.bestSolution = new HashMap<>();
         this.finalBestCost = Double.MAX_VALUE;
 
-        // 初始化输出目录
         File dir = new File(OUTPUT_DIR);
         if (!dir.exists()) dir.mkdirs();
     }
@@ -83,7 +93,6 @@ public class GAIteration {
                 return;
             }
 
-            // 【修改】生成唯一的日志文件名 (在开始前确定)
             SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd_HHmmss");
             String fileName = FILE_PREFIX + sdf.format(new Date()) + ".txt";
             this.currentLogFile = new File(OUTPUT_DIR, fileName);
@@ -91,14 +100,14 @@ public class GAIteration {
             System.out.println("\n[激进模式配置] 分组数: " + totalGroups + ", 种群大小: " + gaPopulationSize
                     + ", 精英数: " + gaElitismCount + ", 最大迭代: " + maxGaIterations);
             System.out.println("[日志策略] 每轮迭代即时追加保存至: " + currentLogFile.getAbsolutePath());
+            System.out.println("[日志列] 新增 Avg_Stage1_Cost 和 Avg_Stage2_Benefit");
 
-            Map<Map<Integer, Integer>, Double> fitnessMap = new HashMap<>();
+            // 使用新的 Map 结构存储详细信息
+            Map<Map<Integer, Integer>, FitnessDetails> fitnessDetailsMap = new HashMap<>();
 
-            // 1. 初始化种群
             System.out.println("\n生成高多样性初始群落...");
             List<Map<Integer, Integer>> population = initGAPopulation();
 
-            // 2. GA 迭代主循环
             System.out.println("开始激进迭代...");
             int gaIter = 0;
             boolean triggeredRestart = false;
@@ -107,21 +116,29 @@ public class GAIteration {
                 long gaIterStartTime = System.currentTimeMillis();
                 System.out.println("\n---------------------- GA第 " + gaIter + " / " + maxGaIterations + " 次迭代 ----------------------");
 
-                // 2.1 评估适应度
-                fitnessMap = evaluatePopulationFitness(population, fitnessMap);
+                // 2.1 评估适应度 (返回详细信息)
+                fitnessDetailsMap = evaluatePopulationFitnessDetailed(population, fitnessDetailsMap);
 
-                Map<Integer, Integer> currentBestInd = getCurrentPopulationBest(fitnessMap);
+                // 获取当前代最优个体
+                Map<Integer, Integer> currentBestInd = getCurrentPopulationBest(fitnessDetailsMap);
                 if (currentBestInd == null) {
                     System.err.println("当前代无有效个体，终止迭代。");
                     break;
                 }
 
-                double currentBestFitness = fitnessMap.get(currentBestInd);
-                double currentAvgFitness = calculatePopulationAvgFitness(fitnessMap);
+                // 【修复】直接访问字段
+                FitnessDetails bestDetails = fitnessDetailsMap.get(currentBestInd);
+                double currentBestFitness = bestDetails.totalCost;
+
+                // 计算种群平均指标
+                double currentAvgTotal = calculatePopulationAvgTotalCost(fitnessDetailsMap);
+                double currentAvgStage1 = calculatePopulationAvgStage1Cost(fitnessDetailsMap);
+                double currentAvgStage2 = calculatePopulationAvgStage2Benefit(fitnessDetailsMap);
+
                 double diversity = calculateDiversity(population);
 
                 // 2.2 更新全局最优
-                boolean improved = updateGlobalBestSolution(fitnessMap);
+                boolean improved = updateGlobalBestSolution(fitnessDetailsMap);
 
                 // 2.3 停滞检测与处理
                 if (!improved || Math.abs(currentBestFitness - lastBestFitness) < 1e-6) {
@@ -131,17 +148,15 @@ public class GAIteration {
                 }
                 lastBestFitness = currentBestFitness;
 
-                // 停滞处理：触发部分重启
                 if (zeroProgressCount >= stagnationThreshold) {
                     System.out.println("⚠️ 检测到停滞 (" + zeroProgressCount + "代)! 触发【部分重启机制】...");
-                    population = performPartialRestart(population, currentBestInd, fitnessMap);
+                    population = performPartialRestart(population, currentBestInd, fitnessDetailsMap);
                     zeroProgressCount = 0;
                     triggeredRestart = true;
                     System.out.println(">>> 重启完成，种群多样性已恢复。");
                 } else {
                     triggeredRestart = false;
-                    // 正常演化
-                    List<Map<Integer, Integer>> selectedPopulation = selectPopulation(fitnessMap);
+                    List<Map<Integer, Integer>> selectedPopulation = selectPopulation(fitnessDetailsMap);
                     List<Map<Integer, Integer>> crossedPopulation = crossoverPopulation(selectedPopulation);
                     population = mutatePopulation(crossedPopulation, gaIter);
                 }
@@ -149,24 +164,25 @@ public class GAIteration {
                 long gaIterEndTime = System.currentTimeMillis();
                 double gaIterCostTime = (gaIterEndTime - gaIterStartTime) / 1000.0;
 
-                // 【关键修改】每轮迭代后立即保存记录
-                saveIterationLogImmediately(gaIter, currentBestFitness, currentAvgFitness, diversity, currentBestInd, gaIterCostTime, triggeredRestart);
+                // 【关键修改】保存记录时传入平均一阶段和二阶段成本
+                saveIterationLogImmediately(gaIter, currentBestFitness, currentAvgTotal, diversity,
+                        currentAvgStage1, currentAvgStage2, currentBestInd, gaIterCostTime, triggeredRestart);
 
-                System.out.println("当前最优: " + String.format("%.4f", currentBestFitness) +
-                        " | 平均: " + String.format("%.4f", currentAvgFitness) +
+                System.out.println("当前最优总成本: " + String.format("%.4f", currentBestFitness) +
+                        " | 平均总成本: " + String.format("%.4f", currentAvgTotal) +
+                        " | (Avg_Stage1: " + String.format("%.2f", currentAvgStage1) +
+                        ", Avg_Stage2_Benefit: " + String.format("%.2f", currentAvgStage2) + ")" +
                         " | 多样性: " + String.format("%.2f", diversity) +
                         " | 耗时: " + String.format("%.1f", gaIterCostTime/60) + " 分" +
                         (triggeredRestart ? " [已重启]" : ""));
             }
 
-            // 3. 输出最终结果摘要 (单独保存一份最终最优解详情)
             System.out.println("\n========================================");
             System.out.println("优化全流程结束 (总迭代: " + gaIter + ")");
             System.out.println("最终最优解 ID: " + bestSolution.keySet());
             System.out.println("最终最优总成本: " + String.format("%.6f", finalBestCost));
             System.out.println("========================================");
 
-            // 保存最终解的详细信息到单独文件
             saveFinalSolutionDetails(gaIter);
 
             if (firstStage != null) firstStage.releaseResources();
@@ -174,7 +190,6 @@ public class GAIteration {
         } catch (Exception e) {
             System.err.println("求解过程发生严重异常:");
             e.printStackTrace();
-            // 即使异常，之前的迭代数据也已经保存在日志中了
         }
     }
 
@@ -203,20 +218,16 @@ public class GAIteration {
         if (population.size() < 2) return 0.0;
         int totalDiff = 0;
         int comparisons = 0;
-
         for (int i = 0; i < population.size(); i++) {
             for (int j = i + 1; j < population.size(); j++) {
                 int diffCount = 0;
                 Map<Integer, Integer> p1 = population.get(i);
                 Map<Integer, Integer> p2 = population.get(j);
-
                 for (int g = 0; g < totalGroups; g++) {
                     List<Integer> cands = groupToCandidatesMap.get(g);
                     Integer v1 = cands.stream().filter(p1::containsKey).findFirst().orElse(null);
                     Integer v2 = cands.stream().filter(p2::containsKey).findFirst().orElse(null);
-                    if (v1 != null && v2 != null && !v1.equals(v2)) {
-                        diffCount++;
-                    }
+                    if (v1 != null && v2 != null && !v1.equals(v2)) diffCount++;
                 }
                 totalDiff += diffCount;
                 comparisons++;
@@ -226,10 +237,11 @@ public class GAIteration {
     }
 
     // ===================== 部分重启机制 =====================
-    private List<Map<Integer, Integer>> performPartialRestart(List<Map<Integer, Integer>> currentPop, Map<Integer, Integer> bestInd, Map<Map<Integer, Integer>, Double> fitnessMap) {
+    private List<Map<Integer, Integer>> performPartialRestart(List<Map<Integer, Integer>> currentPop,
+                                                              Map<Integer, Integer> bestInd,
+                                                              Map<Map<Integer, Integer>, FitnessDetails> fitnessMap) {
         List<Map<Integer, Integer>> newPop = new ArrayList<>();
         newPop.add(new HashMap<>(bestInd));
-
         int remaining = gaPopulationSize - 1;
         for (int i = 0; i < remaining; i++) {
             if (i < remaining / 2) {
@@ -239,7 +251,6 @@ public class GAIteration {
                 int groupsToDestroy = (int) (totalGroups * (0.4 + random.nextDouble() * 0.2));
                 List<Integer> groupIndices = new ArrayList<>(groupToCandidatesMap.keySet());
                 Collections.shuffle(groupIndices, random);
-
                 for (int k = 0; k < groupsToDestroy; k++) {
                     swapInGroup(mutated, groupIndices.get(k), random);
                 }
@@ -249,13 +260,13 @@ public class GAIteration {
         return newPop;
     }
 
-    // ===================== 【核心修改】即时保存日志 =====================
+    // ===================== 即时保存日志 =====================
     private void saveIterationLogImmediately(int iter, double bestFit, double avgFit, double div,
+                                             double avgStage1, double avgStage2,
                                              Map<Integer, Integer> bestSol, double timeCost, boolean restarted) {
         if (bestSol == null || currentLogFile == null) return;
 
-        try (BufferedWriter writer = new BufferedWriter(new FileWriter(currentLogFile, true))) { // true 表示追加模式
-            // 如果是第一次写入，先写表头
+        try (BufferedWriter writer = new BufferedWriter(new FileWriter(currentLogFile, true))) {
             if (!fileHeaderWritten) {
                 writer.write("GA Aggressive Iteration Report (Real-time Append Mode)");
                 writer.newLine();
@@ -263,23 +274,25 @@ public class GAIteration {
                 writer.newLine();
                 writer.write("--------------------------------------------------------------------------------");
                 writer.newLine();
-                String header = String.format("%-6s %-12s %-12s %-10s %-8s %-30s", "Iter", "Best_Cost", "Avg_Cost", "Diversity", "Restart", "Selected_IDs");
+                // 表头增加两列
+                String header = String.format("%-6s %-10s %-10s %-10s %-10s %-10s %-8s %-30s",
+                        "Iter", "Best_Total", "Avg_Total", "Avg_Stg1", "Avg_Stg2", "Diversity", "Restart", "Selected_IDs");
                 writer.write(header);
                 writer.newLine();
                 fileHeaderWritten = true;
             }
 
-            // 写入当前行数据
             String solSummary = bestSol.keySet().stream()
                     .map(String::valueOf)
                     .collect(Collectors.joining(", "));
 
-            String line = String.format("%-6d %-12.4f %-12.4f %-10.4f %-8s %-30s",
-                    iter, bestFit, avgFit, div, restarted ? "YES" : "NO", solSummary);
+            // 数据行增加两列
+            String line = String.format("%-6d %-10.4f %-10.4f %-10.4f %-10.4f %-10.4f %-8s %-30s",
+                    iter, bestFit, avgFit, avgStage1, avgStage2, div, restarted ? "YES" : "NO", solSummary);
 
             writer.write(line);
             writer.newLine();
-            writer.flush(); // 强制刷新缓冲区，确保立即写入磁盘
+            writer.flush();
 
         } catch (IOException e) {
             System.err.println("警告：无法即时写入日志文件: " + e.getMessage());
@@ -289,9 +302,7 @@ public class GAIteration {
     // ===================== 保存最终解详情 =====================
     private void saveFinalSolutionDetails(int totalIterations) {
         if (bestSolution.isEmpty() || currentLogFile == null) return;
-
         File finalDetailFile = new File(OUTPUT_DIR, "FINAL_BestSolution_" + currentLogFile.getName().replace(".txt", "_DETAILS.txt"));
-
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(finalDetailFile))) {
             writer.write("=== FINAL OPTIMAL SOLUTION DETAILS ===");
             writer.newLine();
@@ -307,7 +318,6 @@ public class GAIteration {
             writer.newLine();
             writer.newLine();
             writer.write("Full Solution Map: " + bestSolution.toString());
-
             System.out.println("\n[系统] 最终最优解详情已保存至: " + finalDetailFile.getAbsolutePath());
         } catch (IOException e) {
             System.err.println("保存最终解详情失败: " + e.getMessage());
@@ -318,19 +328,16 @@ public class GAIteration {
     private List<Map<Integer, Integer>> initGAPopulation() {
         List<Map<Integer, Integer>> population = new ArrayList<>();
         Set<String> existedKeyStr = new HashSet<>();
-
         Map<Integer, Integer> originalSolution = getFilteredSolution(inputData.getInitialOj());
         if (!isValidConstrainedSolution(originalSolution)) {
             originalSolution = generateRandomConstrainedSolution(random);
         }
         addSolution(population, existedKeyStr, originalSolution, true);
-
         int randomCount = (int) (gaPopulationSize * 0.4);
         while (population.size() <= randomCount) {
             Map<Integer, Integer> randSol = generateRandomConstrainedSolution(random);
             addSolution(population, existedKeyStr, randSol, false);
         }
-
         while (population.size() < gaPopulationSize) {
             Map<Integer, Integer> neighbor = new HashMap<>(originalSolution);
             int groupsToMutate = (int) (totalGroups * (0.2 + random.nextDouble() * 0.1));
@@ -341,7 +348,6 @@ public class GAIteration {
             }
             addSolution(population, existedKeyStr, neighbor, false);
         }
-
         return population;
     }
 
@@ -358,10 +364,7 @@ public class GAIteration {
         List<Integer> candidates = groupToCandidatesMap.get(groupId);
         Integer currentChosen = null;
         for (Integer cand : candidates) {
-            if (solution.containsKey(cand)) {
-                currentChosen = cand;
-                break;
-            }
+            if (solution.containsKey(cand)) { currentChosen = cand; break; }
         }
         if (currentChosen != null) {
             solution.remove(currentChosen);
@@ -387,14 +390,14 @@ public class GAIteration {
         return true;
     }
 
-    // ===================== 评估适应度 =====================
-    private Map<Map<Integer, Integer>, Double> evaluatePopulationFitness(
+    // ===================== 评估适应度 (返回详细信息) =====================
+    private Map<Map<Integer, Integer>, FitnessDetails> evaluatePopulationFitnessDetailed(
             List<Map<Integer, Integer>> population,
-            Map<Map<Integer, Integer>, Double> knownFitnessMap) throws GRBException, IOException {
+            Map<Map<Integer, Integer>, FitnessDetails> knownDetailsMap) throws GRBException, IOException {
 
         int evaluateCount = 0;
         for (Map<Integer, Integer> individual : population) {
-            if (knownFitnessMap.containsKey(individual)) {
+            if (knownDetailsMap.containsKey(individual)) {
                 continue;
             }
             evaluateCount++;
@@ -411,7 +414,7 @@ public class GAIteration {
             LocationResult firstStageResult = firstStage.solve();
 
             if (firstStageResult == null) {
-                knownFitnessMap.put(new HashMap<>(individual), Double.MAX_VALUE);
+                knownDetailsMap.put(new HashMap<>(individual), new FitnessDetails(Double.MAX_VALUE, Double.MAX_VALUE, 0.0));
                 continue;
             }
 
@@ -431,35 +434,70 @@ public class GAIteration {
             }
 
             double totalCost = firstStageCost - expectedSecondStageCost;
-            knownFitnessMap.put(new HashMap<>(individual), totalCost);
+
+            // 存储详细信息
+            knownDetailsMap.put(new HashMap<>(individual), new FitnessDetails(totalCost, firstStageCost, expectedSecondStageCost));
 
             long duration = (System.currentTimeMillis() - individualStartTime) / 1000;
-            System.out.println("  -> 完成。成本: " + String.format("%.4f", totalCost) + ", 耗时: " + duration + "秒");
+            System.out.println("  -> 完成。总成本: " + String.format("%.4f", totalCost) +
+                    " (Stg1: " + String.format("%.2f", firstStageCost) +
+                    ", Stg2_Benefit: " + String.format("%.2f", expectedSecondStageCost) + ")" +
+                    ", 耗时: " + duration + "秒");
         }
-        return knownFitnessMap;
+        return knownDetailsMap;
     }
 
-    private boolean updateGlobalBestSolution(Map<Map<Integer, Integer>, Double> fitnessMap) {
-        Map.Entry<Map<Integer, Integer>, Double> bestEntry = fitnessMap.entrySet().stream()
-                .min(Map.Entry.comparingByValue())
+    // ===================== 辅助计算：种群平均值 =====================
+    private double calculatePopulationAvgTotalCost(Map<Map<Integer, Integer>, FitnessDetails> map) {
+        return map.values().stream()
+                .filter(d -> d.totalCost != Double.MAX_VALUE)
+                .mapToDouble(d -> d.totalCost)
+                .average()
+                .orElse(Double.MAX_VALUE);
+    }
+
+    private double calculatePopulationAvgStage1Cost(Map<Map<Integer, Integer>, FitnessDetails> map) {
+        return map.values().stream()
+                .filter(d -> d.stage1Cost != Double.MAX_VALUE)
+                .mapToDouble(d -> d.stage1Cost)
+                .average()
+                .orElse(0.0);
+    }
+
+    private double calculatePopulationAvgStage2Benefit(Map<Map<Integer, Integer>, FitnessDetails> map) {
+        return map.values().stream()
+                .filter(d -> d.stage1Cost != Double.MAX_VALUE)
+                .mapToDouble(d -> d.stage2Benefit)
+                .average()
+                .orElse(0.0);
+    }
+
+    // ===================== 更新全局最优 =====================
+    private boolean updateGlobalBestSolution(Map<Map<Integer, Integer>, FitnessDetails> fitnessMap) {
+        // 【修复】使用 Lambda 表达式直接比较 totalCost 字段
+        Map.Entry<Map<Integer, Integer>, FitnessDetails> bestEntry = fitnessMap.entrySet().stream()
+                .min((e1, e2) -> Double.compare(e1.getValue().totalCost, e2.getValue().totalCost))
                 .orElse(null);
+
         if (bestEntry == null) return false;
 
-        double currentCost = bestEntry.getValue();
+        double currentCost = bestEntry.getValue().totalCost;
         if (currentCost < this.finalBestCost - 1e-6) {
             this.finalBestCost = currentCost;
             this.bestSolution = new HashMap<>(bestEntry.getKey());
-            System.out.println(">>> 🚀 更新全局最优解! 成本: " + String.format("%.6f", finalBestCost));
+            System.out.println(">>> 🚀 更新全局最优解! 总成本: " + String.format("%.6f", finalBestCost));
             return true;
         }
         return false;
     }
 
-    private List<Map<Integer, Integer>> selectPopulation(Map<Map<Integer, Integer>, Double> fitnessMap) {
+    // ===================== 选择 =====================
+    private List<Map<Integer, Integer>> selectPopulation(Map<Map<Integer, Integer>, FitnessDetails> fitnessMap) {
         List<Map<Integer, Integer>> selected = new ArrayList<>();
 
+        // 【修复】使用 Lambda 表达式直接比较 totalCost 字段
         List<Map<Integer, Integer>> elite = fitnessMap.entrySet().stream()
-                .sorted(Map.Entry.comparingByValue())
+                .sorted((e1, e2) -> Double.compare(e1.getValue().totalCost, e2.getValue().totalCost))
                 .limit(gaElitismCount)
                 .map(Map.Entry::getKey)
                 .collect(Collectors.toList());
@@ -470,8 +508,8 @@ public class GAIteration {
 
         Map<Map<Integer, Integer>, Double> weightMap = new HashMap<>();
         double totalWeight = 0.0;
-        for (Map.Entry<Map<Integer, Integer>, Double> entry : fitnessMap.entrySet()) {
-            double f = entry.getValue();
+        for (Map.Entry<Map<Integer, Integer>, FitnessDetails> entry : fitnessMap.entrySet()) {
+            double f = entry.getValue().totalCost;
             if (f == Double.MAX_VALUE) continue;
             double w = 1.0 / (f + 0.001);
             weightMap.put(entry.getKey(), w);
@@ -492,10 +530,10 @@ public class GAIteration {
         return selected;
     }
 
+    // ===================== 交叉 =====================
     private List<Map<Integer, Integer>> crossoverPopulation(List<Map<Integer, Integer>> selected) {
         List<Map<Integer, Integer>> nextGen = new ArrayList<>();
         nextGen.addAll(selected.subList(0, Math.min(gaElitismCount, selected.size())));
-
         List<Map<Integer, Integer>> nonElite = selected.subList(Math.min(gaElitismCount, selected.size()), selected.size());
         for (int i = 0; i < nonElite.size(); i += 2) {
             if (i + 1 >= nonElite.size()) {
@@ -504,40 +542,34 @@ public class GAIteration {
             }
             Map<Integer, Integer> p1 = nonElite.get(i);
             Map<Integer, Integer> p2 = nonElite.get(i+1);
-
             if (random.nextDouble() > gaCrossoverRate) {
                 nextGen.add(new HashMap<>(p1));
                 nextGen.add(new HashMap<>(p2));
                 continue;
             }
-
             Map<Integer, Integer> c1 = new HashMap<>();
             Map<Integer, Integer> c2 = new HashMap<>();
-
             for (int g = 0; g < totalGroups; g++) {
                 boolean takeP1ForC1 = random.nextBoolean();
                 List<Integer> gCands = groupToCandidatesMap.get(g);
                 Integer v1 = gCands.stream().filter(p1::containsKey).findFirst().orElse(gCands.get(0));
                 Integer v2 = gCands.stream().filter(p2::containsKey).findFirst().orElse(gCands.get(0));
-
                 if (takeP1ForC1) { c1.put(v1, 1); c2.put(v2, 1); }
                 else { c1.put(v2, 1); c2.put(v1, 1); }
             }
             nextGen.add(c1);
             nextGen.add(c2);
         }
-
         if (nextGen.size() > gaPopulationSize) nextGen = nextGen.subList(0, gaPopulationSize);
         return nextGen;
     }
 
+    // ===================== 变异 =====================
     private List<Map<Integer, Integer>> mutatePopulation(List<Map<Integer, Integer>> population, int currentIter) {
         List<Map<Integer, Integer>> mutated = new ArrayList<>();
-
         double progress = (double) currentIter / maxGaIterations;
         double currentMutationRate = baseMutationRate - (progress * (baseMutationRate - minMutationRate));
         double currentMutateRatio = maxGroupsToMutateRatio * (1.0 - progress * 0.5);
-
         System.out.println("  -> 动态变异率: " + String.format("%.2f", currentMutationRate) +
                 ", 变异组比例上限: " + String.format("%.1f", currentMutateRatio) + "%");
 
@@ -546,36 +578,31 @@ public class GAIteration {
                 mutated.add(new HashMap<>(population.get(i)));
                 continue;
             }
-
             Map<Integer, Integer> ind = new HashMap<>(population.get(i));
-
             if (random.nextDouble() < currentMutationRate) {
                 int groupsToMutate = 1 + random.nextInt((int) (totalGroups * currentMutateRatio / 100.0) + 1);
                 groupsToMutate = Math.min(groupsToMutate, totalGroups - 1);
-
                 List<Integer> groupIndices = new ArrayList<>(groupToCandidatesMap.keySet());
                 Collections.shuffle(groupIndices, random);
-
                 for (int k = 0; k < groupsToMutate; k++) {
                     swapInGroup(ind, groupIndices.get(k), random);
                 }
             }
-
             if (random.nextDouble() < 0.05) {
                 ind = generateRandomConstrainedSolution(random);
             }
-
             mutated.add(ind);
         }
         return mutated;
     }
 
-    private Map<Integer, Integer> getCurrentPopulationBest(Map<Map<Integer, Integer>, Double> map) {
-        return map.entrySet().stream().min(Map.Entry.comparingByValue()).map(Map.Entry::getKey).orElse(null);
-    }
-
-    private double calculatePopulationAvgFitness(Map<Map<Integer, Integer>, Double> map) {
-        return PriceCalculator.calculatePopulationAvgFitness(map);
+    // ===================== 工具方法 =====================
+    private Map<Integer, Integer> getCurrentPopulationBest(Map<Map<Integer, Integer>, FitnessDetails> map) {
+        // 【修复】使用 Lambda 表达式直接比较 totalCost 字段
+        return map.entrySet().stream()
+                .min((e1, e2) -> Double.compare(e1.getValue().totalCost, e2.getValue().totalCost))
+                .map(Map.Entry::getKey)
+                .orElse(null);
     }
 
     private Map<Integer, Integer> getFilteredSolution(Map<Integer, Integer> sol) {

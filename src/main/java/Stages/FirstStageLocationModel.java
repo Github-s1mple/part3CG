@@ -145,6 +145,41 @@ public class FirstStageLocationModel {
      * @throws GRBException 目标函数设置可能抛出的异常
      */
     public void setObjective() throws GRBException {
+//        System.out.println("\n========== [DEBUG] 目标函数构建校验 ==========");
+//
+//        // 1. 打印当前模型加载的所有候选点信息
+//        System.out.println("模型中加载的候选点 (ID -> 坐标/成本):");
+//        for (int id : C) {
+//            Candidate c = candidates.getCandidate(id);
+//            System.out.printf("ID: %4d | 坐标：(%10.4f, %10.4f) | 建设成本：%10.2f%n",
+//                    id, c.getLongitude(), c.getLatitude(), c.getBuildCost());
+//        }
+//
+//        // 2. 打印当前固定解 (Fixed O_i)
+//        System.out.println("\n当前固定的解 (GA 传入的 ID -> 值):");
+//        for (Map.Entry<Integer, Integer> entry : fixedOValues.entrySet()) {
+//            if (entry.getValue() == 1) {
+//                int id = entry.getKey();
+//                if (candidates.getCandidate(id) != null) {
+//                    Candidate c = candidates.getCandidate(id);
+//                    System.out.printf("选中 ID: %4d -> 对应物理点坐标：(%10.4f, %10.4f)%n",
+//                            id, c.getLongitude(), c.getLatitude());
+//                } else {
+//                    System.out.println("选中 ID: " + id + " -> 错误：模型中找不到该 ID!");
+//                }
+//            }
+//        }
+//
+//        // 3. 关键校验：手动计算一次总固定成本，与 Gurobi 对比
+//        double manualFixedCost = 0.0;
+//        for (int id : C) {
+//            if (fixedOValues.getOrDefault(id, 0) == 1) {
+//                manualFixedCost += candidates.getCandidate(id).getBuildCost();
+//            }
+//        }
+//        System.out.println("\n[校验] 手动计算的固定成本总和：" + manualFixedCost);
+//        System.out.println("============================================\n");
+
         GRBLinExpr objExpr = new GRBLinExpr();
 
         // 1. 固定成本项：Σf_i·O_i

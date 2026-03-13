@@ -26,10 +26,12 @@ public class CGTest {
         List<Order> optimalOrders = cgSolve.solve();
         long gaIterEndTime = System.currentTimeMillis();
         double gaIterCostTime = (gaIterEndTime - gaIterStartTime) / 1000.0;
+
         Orders orders = new Orders(optimalOrders);
+        orders.setFences(instance.getFences());
         exportOrdersToXlsx(orders, "order_detail.xlsx");
         //作图
-        orders.setFences(instance.getFences());
+
         orders.generateFenceList();
         ArrayList<Fence> baseFenceList = instance.getFences().getFenceList();
         List<Fence> highlightFenceList = orders.getVisitedFences();
