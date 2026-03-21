@@ -43,7 +43,7 @@ public class OrderExcelExporter {
         sheet.setColumnWidth(1, 80 * 256);  // 访问围栏顺序（ID+经纬度）- 重点加宽
         sheet.setColumnWidth(2, 15 * 256);  // 围栏总数
         sheet.setColumnWidth(3, 15 * 256);  // 订单距离
-        sheet.setColumnWidth(4, 15 * 256);  // 配送成本
+        sheet.setColumnWidth(4, 15 * 256);  // 路径收益
         sheet.setColumnWidth(5, 15 * 256);  // 调度量
         sheet.setColumnWidth(6, 30 * 256);  // 围栏需求（ID:需求）
         sheet.setColumnWidth(7, 40 * 256);  // 围栏经纬度（ID:经度,纬度）
@@ -52,7 +52,7 @@ public class OrderExcelExporter {
         Row headerRow = sheet.createRow(0);
         String[] headers = {
                 "订单ID", "访问围栏顺序（ID+经纬度）", "围栏总数", "订单距离",
-                "配送成本", "调度量", "各围栏需求", "各围栏经纬度"
+                "路径收益", "调度量", "各围栏需求", "各围栏经纬度"
         };
         // 设置表头样式（加粗）
         CellStyle headerStyle = workbook.createCellStyle();
@@ -95,7 +95,7 @@ public class OrderExcelExporter {
 
             // 4.5 配送成本（carrierCost）
             Cell cell4 = dataRow.createCell(4);
-            cell4.setCellValue(String.format("%.2f", order.getCarrierCost()));
+            cell4.setCellValue(String.format("%.2f", order.getOriginalPrice()));
 
             // 4.6 调度量（dispatchNum）
             Cell cell5 = dataRow.createCell(5);
