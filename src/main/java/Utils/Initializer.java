@@ -124,9 +124,7 @@ public class Initializer {
 
         depotList = new ArrayList<>();
         // 确定文件路径：若有result则用正式路径，否则根据算法模式选择路径
-        String filePath = (result != null)
-                ? Constants.candidatePointsFilePath
-                : Constants.candidatePointsTestFilePath;
+        String filePath = Constants.candidatePointsFilePath;
 
         try (FileInputStream fis = new FileInputStream(filePath);
              Workbook workbook = WorkbookFactory.create(fis)) {

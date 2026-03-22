@@ -195,17 +195,20 @@ public class GAIteration {
 
     // ===================== 辅助方法：分组映射 =====================
     private boolean initGroupMapping() {
+        int seqNum;
+        if(Objects.equals(Constants.ALGO_MODE, "building")) seqNum = 1;
+        else seqNum = 4;
         if (allCandidateIds == null || allCandidateIds.isEmpty()) return false;
         List<Integer> sortedIds = new ArrayList<>(allCandidateIds);
         Collections.sort(sortedIds);
-        if (sortedIds.size() % 4 != 0) return false;
+        if (sortedIds.size() % seqNum != 0) return false;
 
-        this.totalGroups = sortedIds.size() / 4;
+        this.totalGroups = sortedIds.size() / seqNum;
         this.candidateToGroupMap = new HashMap<>();
         this.groupToCandidatesMap = new HashMap<>();
 
         for (int i = 0; i < sortedIds.size(); i++) {
-            int groupId = i / 4;
+            int groupId = i / seqNum;
             int candidateId = sortedIds.get(i);
             candidateToGroupMap.put(candidateId, groupId);
             groupToCandidatesMap.computeIfAbsent(groupId, k -> new ArrayList<>()).add(candidateId);

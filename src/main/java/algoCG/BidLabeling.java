@@ -387,6 +387,8 @@ public class BidLabeling {
                     continue;
                 }
 
+
+
                 // 复制禁忌表并标记当前节点为已访问
                 BitSet tabu_ = (BitSet) label.getTabu().clone();
                 tabu_.set(nextNode, true);

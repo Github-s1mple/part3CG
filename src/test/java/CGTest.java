@@ -19,7 +19,7 @@ import static Utils.OrderExcelExporter.exportOrdersToXlsx;
 
 public class CGTest {
     public static void main(String[] args) throws IOException {
-        Constants.EXPAND_STEP = Arrays.asList(0.1, 0.1, 0.1, 0.1, 0.1, 0.1);
+        //Constants.EXPAND_STEP = Arrays.asList(0.1, 0.1, 0.1, 0.1, 0.1, 0.1);
         LocationResult firstStageResult = ResultPersistenceUtil.loadFirstStageResult("firstStageResult.json");
         Instance instance = new Instance(firstStageResult);
         long gaIterStartTime = System.currentTimeMillis();
@@ -30,7 +30,7 @@ public class CGTest {
 
         Orders orders = new Orders(optimalOrders);
         orders.setFences(instance.getFences());
-        exportOrdersToXlsx(orders, "order_detail1.xlsx");
+        exportOrdersToXlsx(orders, "order_detail.xlsx");
         //作图
         orders.generateFenceList();
         ArrayList<Fence> baseFenceList = instance.getFences().getFenceList();

@@ -34,7 +34,7 @@ public class ResultProcess {
         }
         for (Order order : orders.getOrderList()) {
             System.out.printf("路径所属仓库：%d%n", order.getDepot());
-            System.out.printf("总路径距离：%s 千米%n", df.format(order.getDistance()));
+            System.out.printf("总路径距离：%s 米%n", df.format(order.getDistance()));
             System.out.println("详细路径：");
 
             // 获取围栏顺序列表和装载量映射

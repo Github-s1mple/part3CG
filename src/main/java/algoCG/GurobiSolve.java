@@ -8,7 +8,6 @@ import lombok.Setter;
 import baseinfo.Constants;
 
 import java.util.*;
-
 import java.text.DecimalFormat;
 
 @Setter
@@ -100,11 +99,12 @@ public class GurobiSolve {
         this.env = new GRBEnv();
         this.model = new GRBModel(env);
 
-        // 设置模型参数（控制求解行为）
+        // 设置模型参数（核心：添加300秒超时限制）
         model.set(GRB.IntParam.OutputFlag, outputFlag ? 1 : 0);  // 日志输出开关
         model.set(GRB.DoubleParam.FeasibilityTol, 1e-5);         // 可行性 tolerance
         model.set(GRB.IntParam.Presolve, 1);                     // 启用预处理
         model.set(GRB.DoubleParam.MIPGap, 0.01);                 // MIP求解间隙（1%）
+        model.set(GRB.DoubleParam.TimeLimit, Constants.BASELINE_TIME_LIMIT);
         this.gurobiUtils = new GurobiUtils(env, model, constrMap);
     }
 
@@ -198,7 +198,7 @@ public class GurobiSolve {
         // 1. 总收益：∑(k∈K) ∑(i∈N) (dik × 围栏i单位价值)
         for (int i : N) {
             Fence fence = fences.getFenceList().get(i - 1);
-            double unitValue = fence.getOriginalFenceValue(); // 围栏单位价值
+            double unitValue = fence.getOriginalFenceValue() + Constants.BIKE_STABLE_COST_PER_ORDER; // 围栏单位价值
 
             for (int k : K) {
                 String dName = String.format("d_%d_%d", i, k);
@@ -313,6 +313,9 @@ public class GurobiSolve {
 
         // 13. 载具访问次数约束
         addVehicleVisitNumConstraints();
+
+        // 14. 同类型围栏访问约束
+        //addSameClassFenceConstraints();
 
         model.update();
         System.out.printf("约束添加完成：共%d条约束%n", constrMap.size());
@@ -431,7 +434,6 @@ public class GurobiSolve {
 
                     // 判空：若Z变量未定义，跳过（避免null）
                     if (zVar == null) {
-                        // System.err.printf("警告：路径变量Z_%d_%d_%d未定义，跳过该term%n", j, i, k);
                         continue;
                     }
                     expr.addTerm(1.0, zVar);
@@ -502,8 +504,8 @@ public class GurobiSolve {
             // 约束：总装载量 ≤ 载具容量
             GRBConstr constrMax = model.addConstr(expr, GRB.LESS_EQUAL, capacity, constrName);
             constrMap.put(constrName, constrMax);
-            GRBConstr constrMin = model.addConstr(expr, GRB.GREATER_EQUAL, Constants.MIN_CARRIER_LOAD, constrName);
-            constrMap.put(constrName, constrMin);
+            GRBConstr constrMin = model.addConstr(expr, GRB.GREATER_EQUAL, Constants.MIN_CARRIER_LOAD, constrName + "_min");
+            constrMap.put(constrName + "_min", constrMin);
         }
     }
 
@@ -705,39 +707,82 @@ public class GurobiSolve {
         }
     }
 
+    /**
+     * 14. 同类型围栏访问约束
+     * 逻辑：载具k只能访问其所属仓库dClass相同的围栏（Fence.fClass = Depot.dClass）
+     * 实现方式：对于不同类型的围栏，强制Xik=0（禁止访问）
+     */
+    private void addSameClassFenceConstraints() throws GRBException {
+        // 1. 先构建仓库ID到dClass的映射（仓库ID：-1、-2...）
+        Map<Integer,Double> depotIdToDClassMap = new HashMap<>();
+        for (Depot depot : depots.getDepotList()) {
+            int depotId = -depots.getDepotList().indexOf(depot) - 1; // 仓库ID（-1、-2...）
+            depotIdToDClassMap.put(depotId, depot.getDClass());
+        }
+
+        // 2. 遍历所有载具和围栏，添加约束
+        for (int k : K) { // 遍历载具
+            int depotId = carrierToDepotMap.get(k); // 载具k所属仓库ID（如-1）
+            Double depotClass = depotIdToDClassMap.get(depotId); // 仓库的dClass
+
+            for (int i : N) { // 遍历围栏（i是围栏ID，1-based）
+                Fence fence = fences.getFenceList().get(i - 1); // 围栏ID转索引
+                Double fenceClass = fence.getFClass();
+
+                // 如果围栏类型 != 仓库类型，强制禁止访问（Xik=0）
+                if (!fenceClass.equals(depotClass)) {
+                    String xVarName = String.format("X_%d_%d", i, k);
+                    GRBVar xVar = varMap.get(xVarName);
+
+                    if (xVar != null) {
+                        String constrName = String.format("same_class_k%d_i%d", k, i);
+                        // 约束：Xik = 0（禁止访问不同类型的围栏）
+                        GRBConstr constr = model.addConstr(xVar, GRB.EQUAL, 0.0, constrName);
+                        constrMap.put(constrName, constr);
+                    }
+                }
+            }
+        }
+        System.out.println("同类型围栏访问约束添加完成");
+    }
 
     /**
-     * 求解模型并输出完整结果（包含冲突分析）
+     * 求解模型并输出完整结果（包含超时处理）
      */
     public List<Order> solve() throws GRBException {
         // 记录求解开始时间（毫秒）
         long startTime = System.currentTimeMillis();
-        System.out.println("开始求解......");
+        System.out.println("开始求解......（超时限制：" + Constants.BASELINE_TIME_LIMIT + "秒）");
         try {
             // 执行求解
             model.optimize();
 
             // 输出求解状态
             int status = model.get(GRB.IntAttr.Status);
-            System.out.println("求解成功！");
-            System.out.println("求解状态：" + GurobiUtils.getStatusDescription(status));
+            String statusDesc = GurobiUtils.getStatusDescription(status);
+            System.out.println("求解状态：" + statusDesc);
 
-            // 无可行解时，调用冲突约束分析
+            // 处理超时/不可行/最优等不同状态
             if (status == GRB.Status.INFEASIBLE) {
                 gurobiUtils.printConflictConstraints();
                 System.out.println("未找到可行解，已输出冲突约束分析");
                 return null;
-            }
-
-            // 非可行/最优状态，终止输出
-            if (status != GRB.Status.OPTIMAL && status != GRB.Status.SUBOPTIMAL) {
-                System.out.println("未找到可行解或最优解，终止输出");
+            } else if (status == GRB.Status.TIME_LIMIT) {
+                // 关键：超时后读取当前最优解
+                System.out.println("\n【超时提示】求解已达到" + Constants.BASELINE_TIME_LIMIT + "秒时间限制，输出当前找到的最优解");
+                // 检查是否有可行解
+                if (model.get(GRB.IntAttr.SolCount) == 0) {
+                    System.out.println("超时且未找到任何可行解");
+                    return null;
+                }
+            } else if (status != GRB.Status.OPTIMAL && status != GRB.Status.SUBOPTIMAL) {
+                System.out.println("未找到可行解或最优解（状态码：" + status + "），终止输出");
                 return null;
             }
 
-            // 正常求解后的输出逻辑
+            // 无论是否超时，都输出/生成最优解
             double totalProfit = model.get(GRB.DoubleAttr.ObjVal);
-            System.out.println("【全局最优结果】");
+            System.out.println("【当前最优结果】");
             System.out.println("最优净收益：" + df.format(totalProfit));
 
             if(outputFlag){
@@ -755,7 +800,7 @@ public class GurobiSolve {
             System.out.printf("【求解耗时统计】%n");
             System.out.printf("完整求解过程总耗时：%s 秒%n", df.format(totalTimeSec));
 
-            // 释放模型和环境资源
+            // 释放模型和环境资源（必须执行，避免内存泄漏）
             model.dispose();
             env.dispose();
         }
@@ -824,28 +869,12 @@ public class GurobiSolve {
                 }
             }
         }
-
-//        // 4. 输出Uik：MTZ约束辅助变量
-//        System.out.println("\n4. MTZ辅助变量 Uik（U_围栏ID_载具ID = 取值）");
-//        System.out.println("----------------------------------------");
-//        for (int i : N) {
-//            for (int k : K) {
-//                String varName = String.format("U_%d_%d", i, k);
-//                GRBVar var = varMap.get(varName);
-//                if (var != null) {
-//                    double val = var.get(GRB.DoubleAttr.X);
-//                    if (val > 1e-6) { // 只输出非0值
-//                        System.out.printf("U_%d_%d = %s%n", i, k, df.format(val));
-//                    }
-//                }
-//            }
-//        }
         System.out.println("========================================");
     }
 
 
     /**
-     * 输出载具业务详情（路径、装载量、收益等结构化信息）
+     * 生成载具业务详情（路径、装载量、收益等结构化信息）
      */
     private void produceVehicleBusinessDetails() throws GRBException {
         List<Fence> fenceList = fences.getFenceList();
@@ -900,7 +929,6 @@ public class GurobiSolve {
         List<Fence> fenceList = fences.getFenceList();
         System.out.println("\n【载具业务详情】");
         System.out.println("========================================");
-
         for (int k : K) { // 按载具ID遍历
             Order order = new Order();
             Carrier carrier = carrierList.get(k - 1); // 载具ID从1开始，列表索引从0开始
@@ -951,7 +979,6 @@ public class GurobiSolve {
             double vehicleNetProfit = totalLoadProfit - transportCost;
             System.out.printf("载具净收益：%s%n", df.format(vehicleNetProfit));
             order.setOriginalPrice(vehicleNetProfit);
-
             // ④ 载具k的行驶路径（按顺序展示）
             System.out.println("行驶路径（按顺序）：");
             List<String> path = getVehiclePathInOrder(k, order);
@@ -962,7 +989,8 @@ public class GurobiSolve {
             }
             this.orderList.add(order);
         }
-        System.out.println("========================================");
+        double totalProfit = model.get(GRB.DoubleAttr.ObjVal);
+        System.out.println("最优净收益：" + df.format(totalProfit));
     }
 
 
